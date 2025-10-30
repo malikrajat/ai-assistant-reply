@@ -1,0 +1,31 @@
+{
+  "name": "linkedin-ai-reply-assistant",
+  "version": "1.0.0",
+  "description": "Chrome extension that provides AI-generated reply suggestions for LinkedIn posts and comments",
+  "type": "module",
+  "packageManager": "pnpm@7.1.2",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "npm run type-check && vite build && npm run verify",
+    "build:prod": "npm run clean && npm run type-check && vite build --mode production && npm run verify",
+    "type-check": "tsc --noEmit",
+    "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\"",
+    "watch": "npm run dev",
+    "verify": "node scripts/verify-build.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "linkedin",
+    "ai",
+    "gemini",
+    "reply-assistant"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "terser": "^5.31.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3"
+  }
+}
