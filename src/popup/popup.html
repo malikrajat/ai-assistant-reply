@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn AI Reply Assistant</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <!-- Header -->
+      <header class="popup-header">
+        <svg class="header-icon" width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 0L9.5 5.5L15 7L9.5 8.5L8 14L6.5 8.5L1 7L6.5 5.5L8 0Z" fill="currentColor"/>
+          <path d="M13 2L13.5 4L15.5 4.5L13.5 5L13 7L12.5 5L10.5 4.5L12.5 4L13 2Z" fill="currentColor"/>
+        </svg>
+        <h1 class="header-title">AI Reply Assistant</h1>
+      </header>
+
+      <!-- Usage Section -->
+      <section class="usage-section">
+        <h2 class="section-title">Today's Usage</h2>
+        <div class="usage-display">
+          <div class="usage-count">
+            <span id="currentUsage" class="usage-number">0</span>
+            <span class="usage-separator">/</span>
+            <span id="usageLimit" class="usage-number">50</span>
+          </div>
+          <div class="usage-bar">
+            <div id="usageProgressBar" class="usage-bar-fill" style="width: 0%"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Settings -->
+      <section class="settings-section">
+        <h2 class="section-title">Quick Settings</h2>
+        <div class="setting-item">
+          <label for="toneSelect" class="setting-label">Tone:</label>
+          <select id="toneSelect" class="setting-select">
+            <option value="professional">Professional</option>
+            <option value="polite">Polite</option>
+            <option value="friendly">Friendly</option>
+            <option value="concise">Concise</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="popup-footer">
+        <button id="openOptions" class="btn-link">
+          Full Settings
+        </button>
+      </footer>
+    </div>
+
+    <script type="module" src="popup.ts"></script>
+  </body>
+</html>
