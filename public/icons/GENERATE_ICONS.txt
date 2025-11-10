@@ -1,0 +1,33 @@
+ICON GENERATION REQUIRED
+========================
+
+The extension requires PNG icon files in the following sizes:
+- icon16.png (16x16 pixels)
+- icon48.png (48x48 pixels)  
+- icon128.png (128x128 pixels)
+
+QUICK GENERATION STEPS:
+-----------------------
+
+1. Open icon.svg in this directory
+2. Use one of these methods to convert to PNG:
+
+METHOD 1 - Online (Easiest):
+   - Visit: https://svgtopng.com/
+   - Upload icon.svg
+   - Download at 16px, 48px, and 128px
+   - Rename to icon16.png, icon48.png, icon128.png
+
+METHOD 2 - Command Line (Inkscape):
+   inkscape icon.svg --export-filename=icon16.png --export-width=16 --export-height=16
+   inkscape icon.svg --export-filename=icon48.png --export-width=48 --export-height=48
+   inkscape icon.svg --export-filename=icon128.png --export-width=128 --export-height=128
+
+METHOD 3 - Command Line (ImageMagick):
+   convert -background none icon.svg -resize 16x16 icon16.png
+   convert -background none icon.svg -resize 48x48 icon48.png
+   convert -background none icon.svg -resize 128x128 icon128.png
+
+After generating the icons, delete this file and rebuild the extension.
+
+The build process will automatically copy the icons to the dist/ folder.
