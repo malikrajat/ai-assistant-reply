@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn AI Reply Assistant - Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1 class="title">
+          <svg class="title-icon" width="32" height="32" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 0L9.5 5.5L15 7L9.5 8.5L8 14L6.5 8.5L1 7L6.5 5.5L8 0Z" fill="currentColor"/>
+            <path d="M13 2L13.5 4L15.5 4.5L13.5 5L13 7L12.5 5L10.5 4.5L12.5 4L13 2Z" fill="currentColor"/>
+          </svg>
+          LinkedIn AI Reply Assistant
+        </h1>
+        <p class="subtitle">Configure your AI-powered reply assistant</p>
+      </header>
+
+      <main class="main">
+        <!-- API Configuration Section -->
+        <section class="section">
+          <h2 class="section-title">API Configuration</h2>
+          <div class="section-content">
+            <div class="form-group">
+              <label for="apiKey" class="label">
+                Gemini API Key
+                <span class="required">*</span>
+              </label>
+              <div class="input-with-button">
+                <input
+                  type="password"
+                  id="apiKey"
+                  class="input"
+                  placeholder="Enter your Gemini API key"
+                  autocomplete="off"
+                />
+                <button type="button" id="toggleApiKey" class="btn-icon" aria-label="Toggle API key visibility">
+                  <svg class="icon-eye" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 4C5 4 1.73 7.11 1 10c.73 2.89 4 6 9 6s8.27-3.11 9-6c-.73-2.89-4-6-9-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="help-text">
+                Get your API key from 
+                <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="link">
+                  Google AI Studio
+                </a>
+              </p>
+            </div>
+
+            <div class="form-group">
+              <button type="button" id="testConnection" class="btn btn-secondary">
+                Test Connection
+              </button>
+              <span id="connectionStatus" class="status-message"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Reply Settings Section -->
+        <section class="section">
+          <h2 class="section-title">Reply Settings</h2>
+          <div class="section-content">
+            <div class="form-group">
+              <label class="label">Reply Tone</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="tone" value="professional" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Professional</strong>
+                    <span class="radio-description">Business-appropriate and formal</span>
+                  </span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="tone" value="polite" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Polite</strong>
+                    <span class="radio-description">Respectful and courteous</span>
+                  </span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="tone" value="friendly" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Friendly</strong>
+                    <span class="radio-description">Warm and approachable</span>
+                  </span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="tone" value="concise" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Concise</strong>
+                    <span class="radio-description">Brief and to-the-point</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="maxLength" class="label">
+                Maximum Reply Length
+                <span id="maxLengthValue" class="value-display">500</span> characters
+              </label>
+              <input
+                type="range"
+                id="maxLength"
+                class="slider"
+                min="100"
+                max="1000"
+                step="50"
+                value="500"
+              />
+              <div class="slider-labels">
+                <span>100</span>
+                <span>1000</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Behavior Settings Section -->
+        <section class="section">
+          <h2 class="section-title">Behavior Settings</h2>
+          <div class="section-content">
+            <div class="form-group">
+              <label class="label">Default Action</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="defaultAction" value="insert" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Auto-insert</strong>
+                    <span class="radio-description">Automatically insert reply into comment box</span>
+                  </span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="defaultAction" value="copy" class="radio-input" />
+                  <span class="radio-text">
+                    <strong>Manual copy</strong>
+                    <span class="radio-description">Copy to clipboard for manual pasting</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="rateLimit" class="label">
+                Daily Rate Limit
+                <span id="rateLimitValue" class="value-display">50</span> requests
+              </label>
+              <input
+                type="number"
+                id="rateLimit"
+                class="input input-number"
+                min="1"
+                max="1000"
+                value="50"
+              />
+              <p class="help-text">
+                Maximum number of AI replies you can generate per day
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="stealthMode" class="checkbox-input" />
+                <span class="checkbox-text">
+                  <strong>Stealth Mode (Recommended)</strong>
+                  <span class="checkbox-description">Simulate human typing to make text insertion appear more natural</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Usage Statistics Section -->
+        <section class="section">
+          <h2 class="section-title">Usage Statistics</h2>
+          <div class="section-content">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Today's Usage</div>
+                <div class="stat-value">
+                  <span id="currentUsage">0</span> / <span id="usageLimit">50</span>
+                </div>
+                <div class="stat-progress">
+                  <div id="usageProgressBar" class="stat-progress-fill" style="width: 0%"></div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Resets In</div>
+                <div class="stat-value" id="resetTime">--</div>
+              </div>
+            </div>
+            <button type="button" id="resetUsage" class="btn btn-secondary btn-small">
+              Reset Usage Counter
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <button type="button" id="saveSettings" class="btn btn-primary">
+          Save Settings
+        </button>
+        <div id="saveStatus" class="save-status"></div>
+      </footer>
+    </div>
+
+    <script type="module" src="options.ts"></script>
+  </body>
+</html>
