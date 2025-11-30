@@ -11,9 +11,36 @@ import { validatePostText } from "./utils/validation.js";
 console.log("[Service Worker] LinkedIn AI Reply Assistant loaded");
 
 /**
+ * Keep service worker alive by responding to keep-alive pings
+ */
+let keepAliveInterval: number | null = null;
+
+function startKeepAlive() {
+  if (keepAliveInterval) return;
+  
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.getPlatformInfo(() => {
+      // This keeps the service worker alive
+    });
+  }, 20000) as unknown as number; // Ping every 20 seconds
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
+
+// Start keep-alive when service worker loads
+startKeepAlive();
+
+/**
  * Listen for messages from content scripts
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Ensure service worker stays alive during message processing
+  startKeepAlive();
   console.log("[Service Worker] Received message:", message.type);
 
   // Handle different message types
@@ -156,10 +183,11 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 /**
- * Keep service worker alive (optional - for debugging)
+ * Restart keep-alive on browser startup
  */
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Service Worker] Browser started, service worker active");
+  startKeepAlive();
 });
 
 /**
