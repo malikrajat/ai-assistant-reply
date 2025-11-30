@@ -150,12 +150,13 @@ async function handleButtonClick(
 
 /**
  * Sends a message to the service worker to generate a reply
+ * Includes retry logic for when service worker is inactive
  */
 function sendGenerateReplyMessage(postData: {
     postText: string;
     authorName?: string;
     postDate?: string;
-}): Promise<GenerateReplyResponse> {
+}, retryCount = 0): Promise<GenerateReplyResponse> {
     return new Promise((resolve, reject) => {
         const message: GenerateReplyRequest = {
             type: "GENERATE_REPLY",
@@ -164,7 +165,22 @@ function sendGenerateReplyMessage(postData: {
 
         chrome.runtime.sendMessage(message, (response: GenerateReplyResponse) => {
             if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
+                const error = chrome.runtime.lastError.message || "Unknown error";
+                
+                // If service worker is inactive and we haven't retried too many times
+                if (error.includes("Could not establish connection") && retryCount < 2) {
+                    console.log(`[Content Script] Service worker inactive, retrying... (${retryCount + 1}/2)`);
+                    
+                    // Wait a bit and retry to allow service worker to wake up
+                    setTimeout(() => {
+                        sendGenerateReplyMessage(postData, retryCount + 1)
+                            .then(resolve)
+                            .catch(reject);
+                    }, 500);
+                    return;
+                }
+                
+                reject(new Error(error));
                 return;
             }
 
