@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn AI Reply Assistant",
-  "version": "1.0.0",
-  "description": "AI-powered reply suggestions for LinkedIn posts and comments using Gemini LLM",
+  "version": "1.1.0",
+  "description": "AI-powered replies and drafts for LinkedIn posts, comments, messages and connection notes. Works with Gemini, OpenAI, Claude, DeepSeek, Groq, Mistral, OpenRouter and any OpenAI-compatible API",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -13,7 +13,20 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://www.linkedin.com/*"
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.deepseek.com/*",
+    "https://api.groq.com/*",
+    "https://api.mistral.ai/*",
+    "https://openrouter.ai/*",
+    "https://api.x.ai/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "background": {
     "service_worker": "serviceWorker.js",
@@ -21,7 +34,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*"],
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*",
+        "https://*.linkedin.com/*"
+      ],
       "js": ["contentScript.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
@@ -37,10 +54,23 @@
     "default_title": "LinkedIn AI Reply Assistant"
   },
   "options_page": "options.html",
+  "commands": {
+    "generate-ai-reply": {
+      "suggested_key": {
+        "default": "Alt+Shift+G",
+        "mac": "Alt+Shift+G"
+      },
+      "description": "Generate an AI reply for the focused LinkedIn text box"
+    }
+  },
   "web_accessible_resources": [
     {
       "resources": ["styles.css"],
-      "matches": ["https://www.linkedin.com/*"]
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*",
+        "https://*.linkedin.com/*"
+      ]
     }
   ]
 }
