@@ -1,0 +1,492 @@
+name: Mirror to GitLab
+
+# Every push (all branches and tags) mirrors this repository to GitLab. The
+# destination is derived at runtime, so renaming the GitHub repository or the
+# owner carries over without editing this file.
+#
+# Required repository secret:
+#   GITLAB_TOKEN   personal, group, or project access token with the
+#                  write_repository scope. Add api to allow automatic project
+#                  creation and richer diagnostics.
+#
+# Optional repository variables:
+#   GITLAB_HOST             default: gitlab.com
+#   GITLAB_NAMESPACE        default: github.repository_owner (nested groups
+#                           such as group/subgroup are supported)
+#   GITLAB_PROJECT_PATH     explicit project name, or a full path when it
+#                           contains a slash
+#   GITLAB_USERNAME         default: oauth2 (set for deploy tokens)
+#   GITLAB_LEGACY_PROJECT   old project path to use only when the derived one
+#                           is unreadable
+#   GITLAB_CREATE_PROJECT   "false" disables automatic project creation
+#
+# The GitHub token is the built-in secrets.GITHUB_TOKEN, declared in the job
+# env because GitHub does not export it as an environment variable. Both
+# tokens reach git only through GIT_ASKPASS helpers in RUNNER_TEMP.
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitlab-sync-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Mirror branches and tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      GITLAB_HOST: ${{ vars.GITLAB_HOST }}
+      GITLAB_NAMESPACE: ${{ vars.GITLAB_NAMESPACE }}
+      GITLAB_PROJECT_PATH: ${{ vars.GITLAB_PROJECT_PATH }}
+      GITLAB_LEGACY_PROJECT: ${{ vars.GITLAB_LEGACY_PROJECT }}
+      GITLAB_CREATE_PROJECT: ${{ vars.GITLAB_CREATE_PROJECT }}
+      GITLAB_USERNAME: ${{ vars.GITLAB_USERNAME }}
+    steps:
+      - name: Mirror all branches and tags to GitLab
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # ---------------------------------------------------------------
+          # Credentials must be present before doing anything else.
+          # ---------------------------------------------------------------
+          if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+            echo "::error::GITHUB_TOKEN is empty. This workflow requires the built-in GitHub token; keep 'permissions: contents: read' and keep the GITHUB_TOKEN job env entry."
+            exit 1
+          fi
+          if [[ -z "${GITLAB_TOKEN:-}" ]]; then
+            echo "::error::GITLAB_TOKEN is empty. Add a repository secret named GITLAB_TOKEN with the write_repository scope (and api for automatic project creation and diagnostics)."
+            exit 1
+          fi
+
+          umask 077
+
+          WORKDIR="$(mktemp -d "${RUNNER_TEMP}/gitlab-sync.XXXXXX")"
+          BARE="${WORKDIR}/repo.git"
+          GH_ASKPASS="$(mktemp "${RUNNER_TEMP}/gitlab-sync-github-askpass.XXXXXX")"
+          GL_ASKPASS="$(mktemp "${RUNNER_TEMP}/gitlab-sync-gitlab-askpass.XXXXXX")"
+          CURL_CONFIG="$(mktemp "${RUNNER_TEMP}/gitlab-sync-curl.XXXXXX")"
+
+          cleanup() {
+            rm -f -- "${GH_ASKPASS}" "${GL_ASKPASS}" "${CURL_CONFIG}"
+            rm -rf -- "${WORKDIR}"
+          }
+          trap cleanup EXIT
+
+          # The scripts contain no secrets. They read the tokens from the
+          # process environment, which git inherits when it invokes them.
+          cat > "${GH_ASKPASS}" <<'GH_ASKPASS_EOF'
+          #!/bin/sh
+          case "$1" in
+            *[Uu]sername*) printf '%s\n' 'x-access-token' ;;
+            *) printf '%s\n' "${GITHUB_TOKEN}" ;;
+          esac
+          GH_ASKPASS_EOF
+
+          cat > "${GL_ASKPASS}" <<'GL_ASKPASS_EOF'
+          #!/bin/sh
+          case "$1" in
+            *[Uu]sername*) printf '%s\n' "${GITLAB_USERNAME:-oauth2}" ;;
+            *) printf '%s\n' "${GITLAB_TOKEN}" ;;
+          esac
+          GL_ASKPASS_EOF
+
+          chmod 700 "${GH_ASKPASS}" "${GL_ASKPASS}"
+
+          # curl gets the private token from a 0600 config file, never from the
+          # command line, a URL, or a log line.
+          {
+            printf 'header = "PRIVATE-TOKEN: %s"\n' "${GITLAB_TOKEN}"
+            printf 'header = "Accept: application/json"\n'
+          } > "${CURL_CONFIG}"
+          chmod 600 "${CURL_CONFIG}"
+
+          gh_git() {
+            GIT_ASKPASS="${GH_ASKPASS}" GIT_TERMINAL_PROMPT=0 \
+              git -c credential.helper= "$@"
+          }
+
+          gl_git() {
+            GIT_ASKPASS="${GL_ASKPASS}" GIT_TERMINAL_PROMPT=0 \
+              git -c credential.helper= "$@"
+          }
+
+          gitlab_api() {
+            local method="$1"
+            local url="$2"
+            local out="$3"
+            shift 3
+            local code
+            if code="$(curl --config "${CURL_CONFIG}" \
+                --silent --show-error \
+                --connect-timeout 15 --max-time 60 \
+                --request "${method}" \
+                --output "${out}" \
+                --write-out '%{http_code}' \
+                "$@" "${url}")"; then
+              printf '%s\n' "${code}"
+            else
+              printf '000\n'
+            fi
+          }
+
+          # ---------------------------------------------------------------
+          # Derive the GitLab destination at runtime.
+          # ---------------------------------------------------------------
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+
+          GITLAB_BASE="${GITLAB_HOST:-https://gitlab.com}"
+          if [[ "${GITLAB_BASE}" != http://* && "${GITLAB_BASE}" != https://* ]]; then
+            GITLAB_BASE="https://${GITLAB_BASE}"
+          fi
+          GITLAB_BASE="${GITLAB_BASE%/}"
+          if [[ "${GITLAB_BASE}" == *"@"* ]]; then
+            echo "::error::GITLAB_HOST must not contain credentials. Never put a token in a URL; use the GITLAB_TOKEN secret and the optional GITLAB_USERNAME instead."
+            exit 1
+          fi
+          GITLAB_HOST="${GITLAB_BASE#*://}"
+
+          NAMESPACE="${GITLAB_NAMESPACE:-${OWNER}}"
+          NAMESPACE="${NAMESPACE#/}"
+          NAMESPACE="${NAMESPACE%/}"
+
+          PROJECT_OVERRIDE="${GITLAB_PROJECT_PATH:-}"
+          PROJECT_OVERRIDE="${PROJECT_OVERRIDE%.git}"
+          PROJECT_OVERRIDE="${PROJECT_OVERRIDE#/}"
+          PROJECT_OVERRIDE="${PROJECT_OVERRIDE%/}"
+
+          if [[ -n "${PROJECT_OVERRIDE}" ]]; then
+            if [[ "${PROJECT_OVERRIDE}" == */* ]]; then
+              # A slash makes this an explicit full project path, including
+              # any nested namespace.
+              FULL_PATH="${PROJECT_OVERRIDE}"
+            else
+              FULL_PATH="${NAMESPACE}/${PROJECT_OVERRIDE}"
+            fi
+          else
+            FULL_PATH="${NAMESPACE}/${REPO_NAME}"
+          fi
+
+          if [[ "${FULL_PATH}" != */* ]]; then
+            FULL_PATH="${NAMESPACE}/${FULL_PATH}"
+          fi
+          FULL_PATH="${FULL_PATH#/}"
+          FULL_PATH="${FULL_PATH%/}"
+
+          DESTINATION="${GITLAB_BASE}/${FULL_PATH}.git"
+          GITLAB_API="${GITLAB_BASE}/api/v4"
+
+          # Diagnostics are deliberately best effort: a token with only
+          # write_repository cannot use most of the API, and that is fine.
+          print_gitlab_diagnostics() {
+            echo "::group::GitLab diagnostics"
+            echo "Derived project path: ${FULL_PATH}"
+            echo "GitLab host: ${GITLAB_HOST}"
+            echo "GITLAB_NAMESPACE: ${NAMESPACE}"
+            if [[ -n "${GITLAB_PROJECT_PATH:-}" ]]; then
+              echo "GITLAB_PROJECT_PATH: ${GITLAB_PROJECT_PATH}"
+            fi
+            if [[ -n "${GITLAB_LEGACY_PROJECT:-}" ]]; then
+              echo "GITLAB_LEGACY_PROJECT: ${GITLAB_LEGACY_PROJECT} (set, but not readable or not used)"
+            fi
+            if [[ -n "${GITLAB_CREATE_PROJECT:-}" ]]; then
+              echo "GITLAB_CREATE_PROJECT: ${GITLAB_CREATE_PROJECT}"
+            fi
+
+            local body
+            local code
+            local username
+            local -a accessible=()
+
+            body="${WORKDIR}/api-user.json"
+            code="$(gitlab_api GET "${GITLAB_API}/user" "${body}")"
+            if [[ "${code}" == "200" ]]; then
+              username="$(jq -r '.username // "unknown"' "${body}" 2>/dev/null || printf 'unknown')"
+              echo "GITLAB_TOKEN belongs to GitLab user: ${username}"
+            else
+              echo "Could not read the GITLAB_TOKEN user via the API (HTTP ${code})."
+              echo "  This is expected when the token lacks the 'api' scope; it does not by itself mean the token is invalid."
+            fi
+
+            body="${WORKDIR}/api-projects.json"
+            code="$(gitlab_api GET "${GITLAB_API}/projects?membership=true&per_page=100&simple=true&order_by=path&sort=asc" "${body}")"
+            if [[ "${code}" == "200" ]] && jq -e 'type == "array"' "${body}" >/dev/null 2>&1; then
+              mapfile -t accessible < <(jq -r '.[].path_with_namespace // empty' "${body}" 2>/dev/null || true)
+              if (( ${#accessible[@]} > 0 )); then
+                echo "Projects visible to this token (first 100):"
+                printf '  - %s\n' "${accessible[@]}"
+              else
+                echo "No projects are visible to this token (first 100)."
+              fi
+            else
+              echo "Could not list accessible projects via the API (HTTP ${code}); skipping that check."
+            fi
+
+            local encoded_full
+            encoded_full="$(jq -rn --arg value "${FULL_PATH}" '$value | @uri')"
+            body="${WORKDIR}/api-project.json"
+            code="$(gitlab_api GET "${GITLAB_API}/projects/${encoded_full}" "${body}")"
+            case "${code}" in
+              200)
+                echo "The derived project exists and the API token can read it. Check git-level membership and token scope."
+                ;;
+              404)
+                echo "No GitLab project was found at the derived path."
+                ;;
+              401|403)
+                echo "The API cannot read the derived project with this token (HTTP ${code})."
+                ;;
+              *)
+                echo "Project lookup at the derived path returned HTTP ${code}."
+                ;;
+            esac
+
+            echo "What to change:"
+            echo "  - Different group/subgroup: set repository variable GITLAB_NAMESPACE (nested paths such as group/subgroup are supported)."
+            echo "  - Different project name or path: set repository variable GITLAB_PROJECT_PATH."
+            echo "  - Different GitLab instance: set repository variable GITLAB_HOST (default gitlab.com)."
+            echo "  - Old project name: set GITLAB_LEGACY_PROJECT, or set GITLAB_PROJECT_PATH to the actual project."
+            echo "  - Automatic creation: GITLAB_TOKEN needs the 'api' scope as well as 'write_repository'."
+            echo "  - No automatic creation: set GITLAB_CREATE_PROJECT=false and create the project manually."
+            echo "::endgroup::"
+          }
+
+          # ---------------------------------------------------------------
+          # Fetch every GitHub branch and tag into a temporary bare repo.
+          # The work tree is never checked out or modified.
+          # ---------------------------------------------------------------
+          GH_URL="${GITHUB_SERVER_URL%/}/${GITHUB_REPOSITORY}.git"
+
+          git init --quiet --bare "${BARE}"
+          cd "${BARE}"
+
+          if ! gh_git fetch --quiet --force --prune --no-tags "${GH_URL}" \
+              '+refs/heads/*:refs/heads/*' \
+              '+refs/tags/*:refs/tags/*'; then
+            echo "::error::Could not fetch ${GITHUB_REPOSITORY} from ${GITHUB_SERVER_URL}. Check the built-in GITHUB_TOKEN and the workflow's 'contents: read' permission."
+            exit 1
+          fi
+
+          if [[ -z "$(git for-each-ref --count=1 --format='%(refname)' refs/heads)" ]]; then
+            echo "GitHub repository ${GITHUB_REPOSITORY} has no branches yet; nothing to mirror. Exiting successfully without touching GitLab."
+            exit 0
+          fi
+
+          # ---------------------------------------------------------------
+          # Prove the derived destination is readable before any push.
+          # ---------------------------------------------------------------
+          DEST_READABLE=false
+          if gl_git ls-remote --heads "${DESTINATION}" >/dev/null 2>"${WORKDIR}/lsremote-derived.err"; then
+            DEST_READABLE=true
+          fi
+
+          if [[ "${DEST_READABLE}" != "true" && -n "${GITLAB_LEGACY_PROJECT:-}" ]]; then
+            LEGACY_INPUT="${GITLAB_LEGACY_PROJECT%.git}"
+            LEGACY_INPUT="${LEGACY_INPUT%/}"
+
+            if [[ "${LEGACY_INPUT}" == *"@"* ]]; then
+              echo "::error::GITLAB_LEGACY_PROJECT appears to contain credentials. Never put a token in a remote URL; use the GITLAB_TOKEN secret and the optional GITLAB_USERNAME instead."
+              exit 1
+            fi
+
+            if [[ "${LEGACY_INPUT}" == http://* || "${LEGACY_INPUT}" == https://* ]]; then
+              LEGACY_URL="${LEGACY_INPUT}"
+              LEGACY_LABEL="${LEGACY_INPUT#*://}"
+              if [[ "${LEGACY_LABEL}" == */* ]]; then
+                LEGACY_PATH="${LEGACY_LABEL#*/}"
+              else
+                LEGACY_PATH=""
+              fi
+            else
+              LEGACY_INPUT="${LEGACY_INPUT#/}"
+              LEGACY_URL="${GITLAB_BASE}/${LEGACY_INPUT}.git"
+              LEGACY_LABEL="${LEGACY_INPUT}"
+              LEGACY_PATH="${LEGACY_INPUT}"
+            fi
+
+            if gl_git ls-remote --heads "${LEGACY_URL}" >/dev/null 2>"${WORKDIR}/lsremote-legacy.err"; then
+              DESTINATION="${LEGACY_URL}"
+              if [[ -n "${LEGACY_PATH}" ]]; then
+                FULL_PATH="${LEGACY_PATH}"
+              fi
+              DEST_READABLE=true
+              echo "::warning::Using legacy GitLab project '${LEGACY_LABEL}'. The GitLab project still has the old name. Rename it in GitLab and update or remove the GITLAB_LEGACY_PROJECT repository variable."
+              echo "WARNING: the mirror is going to the legacy GitLab project '${LEGACY_LABEL}', not to the name derived from the GitHub repository."
+            else
+              echo "GITLAB_LEGACY_PROJECT is set but is not readable; ignoring it and continuing with the derived destination."
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # Missing destination: create it unless explicitly disabled.
+          # Existing projects are never renamed, archived, or reconfigured.
+          # ---------------------------------------------------------------
+          if [[ "${DEST_READABLE}" != "true" ]]; then
+            if [[ "${GITLAB_CREATE_PROJECT:-}" == "false" ]]; then
+              echo "::error::GitLab project '${FULL_PATH}' is not readable and GITLAB_CREATE_PROJECT=false. Create the project manually, or change GITLAB_NAMESPACE, GITLAB_PROJECT_PATH, or GITLAB_LEGACY_PROJECT."
+              print_gitlab_diagnostics
+              exit 1
+            fi
+
+            NAMESPACE_PATH="${FULL_PATH%/*}"
+            PROJECT_NAME="${FULL_PATH##*/}"
+            if [[ -z "${NAMESPACE_PATH}" || "${NAMESPACE_PATH}" == "${FULL_PATH}" ]]; then
+              NAMESPACE_PATH="${NAMESPACE}"
+            fi
+            if [[ -z "${NAMESPACE_PATH}" ]]; then
+              echo "::error::Cannot determine a GitLab namespace for '${FULL_PATH}'. Set GITLAB_NAMESPACE or GITLAB_PROJECT_PATH."
+              print_gitlab_diagnostics
+              exit 1
+            fi
+
+            encoded_namespace="$(jq -rn --arg value "${NAMESPACE_PATH}" '$value | @uri')"
+            namespace_body="${WORKDIR}/namespace.json"
+            namespace_code="$(gitlab_api GET "${GITLAB_API}/namespaces/${encoded_namespace}" "${namespace_body}")"
+
+            if [[ "${namespace_code}" != "200" ]]; then
+              echo "::error::Could not resolve GitLab namespace '${NAMESPACE_PATH}' (HTTP ${namespace_code}). Automatic creation needs a token with the 'api' scope and permission to create projects in that namespace."
+              print_gitlab_diagnostics
+              exit 1
+            fi
+
+            namespace_id="$(jq -r '.id // empty' "${namespace_body}" 2>/dev/null || true)"
+            if [[ ! "${namespace_id}" =~ ^[0-9]+$ ]]; then
+              echo "::error::GitLab returned an unexpected response while resolving namespace '${NAMESPACE_PATH}'."
+              print_gitlab_diagnostics
+              exit 1
+            fi
+
+            create_body="${WORKDIR}/created-project.json"
+            create_code="$(gitlab_api POST "${GITLAB_API}/projects" "${create_body}" \
+              --data-urlencode "name=${PROJECT_NAME}" \
+              --data-urlencode "path=${PROJECT_NAME}" \
+              --data-urlencode "namespace_id=${namespace_id}" \
+              --data-urlencode "visibility=private")"
+
+            if [[ "${create_code}" != "201" ]]; then
+              echo "::error::Could not create GitLab project '${FULL_PATH}' (HTTP ${create_code})."
+              jq -r 'if type == "object" then (.message // .error // empty) else empty end' "${create_body}" 2>/dev/null | sed 's/^/GitLab API: /' || true
+              print_gitlab_diagnostics
+              exit 1
+            fi
+
+            created_path="$(jq -r '.path_with_namespace // empty' "${create_body}" 2>/dev/null || true)"
+            if [[ -n "${created_path}" && "${created_path}" != "${FULL_PATH}" ]]; then
+              echo "GitLab created the project as '${created_path}' (requested '${FULL_PATH}'). Using the path GitLab returned."
+              FULL_PATH="${created_path}"
+              DESTINATION="${GITLAB_BASE}/${FULL_PATH}.git"
+            fi
+
+            if ! gl_git ls-remote --heads "${DESTINATION}" >/dev/null 2>"${WORKDIR}/lsremote-created.err"; then
+              echo "::error::GitLab created project '${FULL_PATH}', but git cannot read it with GITLAB_TOKEN."
+              cat "${WORKDIR}/lsremote-created.err" >&2 || true
+              print_gitlab_diagnostics
+              exit 1
+            fi
+            DEST_READABLE=true
+          fi
+
+          # Log the resolved destination exactly once, before syncing.
+          echo "Resolved GitLab destination: ${DESTINATION}"
+
+          # ---------------------------------------------------------------
+          # Safety guard: refuse to force-push over GitLab-only work.
+          # This has no bypass flag.
+          # ---------------------------------------------------------------
+          if ! gl_git fetch --quiet --force --prune --no-tags "${DESTINATION}" \
+              '+refs/heads/*:refs/gitlab/heads/*' 2>"${WORKDIR}/gitlab-fetch.err"; then
+            cat "${WORKDIR}/gitlab-fetch.err" >&2 || true
+            echo "::error::Could not fetch existing GitLab branches from '${FULL_PATH}'. The safety check cannot run, so no force-push was attempted."
+            exit 1
+          fi
+
+          missing_total="$(
+            {
+              git for-each-ref --format='%(refname)' refs/gitlab/heads
+              git for-each-ref --format='^%(refname)' refs/heads refs/tags
+            } | git rev-list --count --stdin
+          )"
+
+          if [[ "${missing_total:-0}" -gt 0 ]]; then
+            echo "::error::Refusing to force-push: GitLab project '${FULL_PATH}' has branch commits that are not present in the fetched GitHub history."
+            mapfile -t github_refs < <(git for-each-ref --format='%(refname)' refs/heads refs/tags)
+            while IFS= read -r gitlab_ref; do
+              branch_missing="$(git rev-list --count "${gitlab_ref}" --not "${github_refs[@]}")"
+              if [[ "${branch_missing}" -gt 0 ]]; then
+                echo "  - GitLab branch '${gitlab_ref#refs/gitlab/heads/}' has ${branch_missing} commit(s) not reachable from any GitHub branch or tag."
+              fi
+            done < <(git for-each-ref --format='%(refname)' refs/gitlab/heads)
+            echo "No force-push was attempted. Push the missing work to GitHub, or remove or rename the GitLab branch after confirming those commits are no longer needed. This guard cannot be bypassed with a flag."
+            exit 1
+          fi
+
+          # ---------------------------------------------------------------
+          # Work out which GitLab-only refs must be deleted. Tags are listed
+          # explicitly with --tags --refs and deleted as :refs/tags/...
+          # ---------------------------------------------------------------
+          if ! gl_git ls-remote --heads "${DESTINATION}" >"${WORKDIR}/gitlab-heads.txt" 2>"${WORKDIR}/gitlab-heads.err"; then
+            cat "${WORKDIR}/gitlab-heads.err" >&2 || true
+            echo "::error::Could not list GitLab branches for '${FULL_PATH}'. No deletion or push was attempted."
+            exit 1
+          fi
+          if ! gl_git ls-remote --tags --refs "${DESTINATION}" >"${WORKDIR}/gitlab-tags.txt" 2>"${WORKDIR}/gitlab-tags.err"; then
+            cat "${WORKDIR}/gitlab-tags.err" >&2 || true
+            echo "::error::Could not list GitLab tags for '${FULL_PATH}'. No deletion or push was attempted."
+            exit 1
+          fi
+
+          mapfile -t gitlab_heads < <(awk '{print $2}' "${WORKDIR}/gitlab-heads.txt")
+          mapfile -t gitlab_tags < <(awk '{print $2}' "${WORKDIR}/gitlab-tags.txt")
+
+          deletions=()
+          for ref in "${gitlab_heads[@]}"; do
+            [[ -n "${ref}" ]] || continue
+            branch="${ref#refs/heads/}"
+            if ! git show-ref --verify --quiet "refs/heads/${branch}"; then
+              deletions+=(":${ref}")
+            fi
+          done
+          for ref in "${gitlab_tags[@]}"; do
+            [[ -n "${ref}" ]] || continue
+            tag="${ref#refs/tags/}"
+            if ! git show-ref --verify --quiet "refs/tags/${tag}"; then
+              deletions+=(":${ref}")
+            fi
+          done
+
+          # ---------------------------------------------------------------
+          # Force-update only refs/heads/* and refs/tags/*. --prune removes
+          # stale branches; explicit :refs/... entries remove stale tags and
+          # any stale branches as well. No whole-repository mirror push.
+          # ---------------------------------------------------------------
+          push_refspecs=(
+            '+refs/heads/*:refs/heads/*'
+            '+refs/tags/*:refs/tags/*'
+          )
+          if (( ${#deletions[@]} > 0 )); then
+            push_refspecs+=("${deletions[@]}")
+          fi
+
+          push_err="${WORKDIR}/gitlab-push.err"
+          if ! gl_git push --quiet --prune "${DESTINATION}" "${push_refspecs[@]}" 2>"${push_err}"; then
+            cat "${push_err}" >&2 || true
+            if grep -Eqi 'protected branch|protected tag|pre-receive hook declined|not allowed to push|you are not allowed' "${push_err}"; then
+              echo "::error::GitLab rejected a ref update because a branch or tag is protected, or the token's role cannot push to it. Ask a GitLab maintainer to adjust the protected-branch/tag rules, or use a token with a role that can force-push and delete those refs."
+            elif grep -Eqi 'permission denied|forbidden|authentication failed|could not read username|HTTP 40[13]|403' "${push_err}"; then
+              echo "::error::GitLab rejected the credentials or permissions. GITLAB_TOKEN needs the write_repository scope and at least Developer/Maintainer access to '${FULL_PATH}' (or a deploy token with write_repository)."
+            else
+              echo "::error::GitLab push failed for '${FULL_PATH}'. Git's original error is shown above; it has not been replaced by a generic message."
+            fi
+            exit 1
+          fi
+
+          echo "GitLab sync complete for ${FULL_PATH}."

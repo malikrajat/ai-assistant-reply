@@ -1,6 +1,7 @@
 /// <reference types="chrome"/>
 import { getSettings, saveSettings, getUsage } from "../utils/storage.js";
 import { UserSettings } from "../types/index.js";
+import { getProvider } from "../utils/providers.js";
 
 console.log("[Popup] Popup page loaded");
 
@@ -10,6 +11,7 @@ let usageLimitEl: HTMLElement;
 let usageProgressBar: HTMLElement;
 let toneSelect: HTMLSelectElement;
 let openOptionsBtn: HTMLButtonElement;
+let providerLabel: HTMLElement;
 
 /**
  * Initialize the popup page
@@ -43,6 +45,7 @@ function getDOMElements(): void {
     ) as HTMLElement;
     toneSelect = document.getElementById("toneSelect") as HTMLSelectElement;
     openOptionsBtn = document.getElementById("openOptions") as HTMLButtonElement;
+    providerLabel = document.getElementById("providerLabel") as HTMLElement;
 }
 
 /**
@@ -88,6 +91,13 @@ async function loadQuickSettings(): Promise<void> {
 
         // Set tone selector
         toneSelect.value = settings.tone;
+
+        // Show which model is answering
+        const provider = getProvider(settings.provider || "gemini");
+        const model = settings.providers?.[settings.provider]?.model || provider.defaultModel;
+        providerLabel.textContent = model
+          ? `${provider.label} · ${model}`
+          : provider.label;
 
         console.log(`[Popup] Quick settings loaded: tone=${settings.tone}`);
     } catch (error) {

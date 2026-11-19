@@ -135,6 +135,34 @@ body {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+/* Shortcut hint */
+.setting-value {
+  font-size: 12px;
+  color: #374151;
+  font-weight: 500;
+  text-align: right;
+}
+
+.setting-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4b5563;
+}
+
+.shortcut-key {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid #d1d5db;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #f9fafb;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+}
+
 /* Footer */
 .popup-footer {
   padding: 12px 16px;

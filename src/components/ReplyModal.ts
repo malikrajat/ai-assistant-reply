@@ -6,6 +6,7 @@ export class ReplyModal {
   private element: HTMLElement;
   private shadowRoot: ShadowRoot;
   private actionCallback?: (action: string, text: string) => void;
+  private charLimit?: number;
 
   constructor() {
     this.element = document.createElement("div");
@@ -144,6 +145,18 @@ export class ReplyModal {
           font-size: 13px;
           color: #6b7280;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .char-counter {
+          font-variant-numeric: tabular-nums;
+        }
+
+        .char-counter--over {
+          color: #dc2626;
+          font-weight: 600;
         }
 
         .usage-count {
@@ -217,10 +230,14 @@ export class ReplyModal {
           </div>
           <div class="modal-body">
             <textarea class="reply-text" aria-label="Generated reply text" placeholder="Your AI-generated reply will appear here..."></textarea>
-            <div class="usage-info">Usage: <span class="usage-count">0</span>/<span class="usage-limit">50</span></div>
+            <div class="usage-info">
+              <span>Usage: <span class="usage-count">0</span>/<span class="usage-limit">50</span></span>
+              <span class="char-counter"><span class="char-count">0</span> chars</span>
+            </div>
             <div class="error-message hidden"></div>
           </div>
           <div class="modal-footer">
+            <button class="btn btn-secondary" data-action="regenerate">Regenerate</button>
             <button class="btn btn-secondary" data-action="copy">Copy</button>
             <button class="btn btn-primary" data-action="insert">Insert</button>
           </div>
@@ -260,8 +277,40 @@ export class ReplyModal {
       });
     });
 
+    // Live character counter
+    const textarea = this.shadowRoot.querySelector(".reply-text");
+    textarea?.addEventListener("input", () => this.updateCharCounter());
+
     // Escape key to close
     document.addEventListener("keydown", this.handleKeyDown);
+  }
+
+  /**
+   * Updates the live character counter (and warns when over a surface limit).
+   */
+  private updateCharCounter(): void {
+    const textarea = this.shadowRoot.querySelector(
+      ".reply-text"
+    ) as HTMLTextAreaElement | null;
+    const counter = this.shadowRoot.querySelector(
+      ".char-counter"
+    ) as HTMLElement | null;
+    const countEl = this.shadowRoot.querySelector(
+      ".char-count"
+    ) as HTMLElement | null;
+
+    if (!textarea || !counter || !countEl) return;
+
+    const length = textarea.value.length;
+    countEl.textContent = length.toString();
+
+    if (this.charLimit && length > this.charLimit) {
+      counter.classList.add("char-counter--over");
+      counter.title = `LinkedIn allows ${this.charLimit} characters here`;
+    } else {
+      counter.classList.remove("char-counter--over");
+      counter.title = "";
+    }
   }
 
   /**
@@ -280,14 +329,24 @@ export class ReplyModal {
     reply: string,
     usageCount: number,
     usageLimit: number = 50,
-    targetElement?: HTMLElement
+    options: { label?: string; charLimit?: number } = {}
   ): void {
+    this.charLimit = options.charLimit;
+
     // Set reply text
     const textarea = this.shadowRoot.querySelector(
       ".reply-text"
     ) as HTMLTextAreaElement;
     if (textarea) {
       textarea.value = reply;
+    }
+
+    // Title reflects the surface (reply, note, draft...)
+    const titleEl = this.shadowRoot.querySelector(".modal-title");
+    if (titleEl) {
+      titleEl.textContent = options.label
+        ? `${options.label} - review & edit`
+        : "AI Generated Reply";
     }
 
     // Set usage count
@@ -301,6 +360,8 @@ export class ReplyModal {
     if (usageLimitEl) {
       usageLimitEl.textContent = usageLimit.toString();
     }
+
+    this.updateCharCounter();
 
     // Add to DOM
     document.body.appendChild(this.element);
@@ -345,6 +406,19 @@ export class ReplyModal {
   }
 
   /**
+   * Toggles a busy state while a new reply is being generated.
+   */
+  public setLoading(loading: boolean): void {
+    const buttons = this.shadowRoot.querySelectorAll<HTMLButtonElement>(".btn");
+    buttons.forEach((btn) => {
+      btn.disabled = loading;
+      if (btn.dataset.action === "regenerate") {
+        btn.textContent = loading ? "Generating..." : "Regenerate";
+      }
+    });
+  }
+
+  /**
    * Registers a callback for action buttons (copy, insert)
    */
   public onAction(callback: (action: string, text: string) => void): void {
@@ -370,6 +444,7 @@ export class ReplyModal {
     ) as HTMLTextAreaElement;
     if (textarea) {
       textarea.value = text;
+      this.updateCharCounter();
     }
   }
 }

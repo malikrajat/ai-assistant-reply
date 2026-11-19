@@ -49,6 +49,32 @@
   line-height: 1;
 }
 
+/* Floating quick button - follows the focused text box */
+.ai-reply-float-btn {
+  position: fixed;
+  z-index: 999998;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45);
+  opacity: 0.96;
+}
+
+.ai-reply-float-btn:hover {
+  opacity: 1;
+  transform: translateY(-1px) scale(1.04);
+}
+
+.ai-reply-float-btn .ai-reply-btn__icon,
+.ai-reply-float-btn .ai-reply-btn__spinner {
+  width: 18px;
+  height: 18px;
+}
+
 /* Loading state */
 .ai-reply-btn--loading {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

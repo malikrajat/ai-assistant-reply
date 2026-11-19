@@ -1,16 +1,29 @@
 import { LinkedInSelectors, PostData } from "../types/index.js";
+import { cleanupText, looksLikeContent } from "./text.js";
 
 /**
  * LinkedIn DOM selectors
  * Note: These may need updates if LinkedIn changes their DOM structure
  */
 export const SELECTORS: LinkedInSelectors = {
-  postContainer: "div.feed-shared-update-v2",
+  postContainer:
+    "div.feed-shared-update-v2, [data-urn*='urn:li:activity'], [data-urn*='urn:li:share'], [class*='update-components-update-v2'], [class*='feed-shared-update'], [class*='main-feed-activity-card'], [role='article'], article",
   commentBox: ".comments-comment-box__form, .comments-comment-box",
   commentTextarea: ".ql-editor[contenteditable='true']",
-  postContent:
-    ".feed-shared-update-v2__description, .feed-shared-inline-show-more-text",
-  authorName: ".update-components-actor__name, .update-components-actor__title",
+  // LinkedIn has moved the post body around over the years, so we try the
+  // modern containers first and fall back to the older class names.
+  postContent: [
+    "[data-test-id='main-feed-activity-card__commentary']",
+    ".update-components-update-v2__commentary",
+    "[class*='update-components-text']",
+    "[class*='attributed-text-segment-list']",
+    ".feed-shared-update-v2__description",
+    ".feed-shared-inline-show-more-text",
+    ".feed-shared-text",
+    "[class*='commentary']",
+  ].join(", "),
+  authorName:
+    ".update-components-actor__name, .update-components-actor__title, .update-components-actor__title span, .feed-shared-actor__name",
   postDate:
     ".update-components-actor__sub-description, .feed-shared-actor__sub-description",
 };
@@ -51,7 +64,7 @@ export function extractPostText(element: HTMLElement): string {
 
     // Get text content and clean it
     const text = postContentElement.innerText || postContentElement.textContent || "";
-    return text.trim();
+    return cleanupText(text);
   } catch (error) {
     console.error("[DOM] Error extracting post text:", error);
     return "";
@@ -78,7 +91,7 @@ export function extractAuthorName(element: HTMLElement): string | undefined {
     }
 
     const name = authorElement.innerText || authorElement.textContent || "";
-    return name.trim() || undefined;
+    return cleanupText(name) || undefined;
   } catch (error) {
     console.error("[DOM] Error extracting author name:", error);
     return undefined;
@@ -105,7 +118,7 @@ export function extractPostDate(element: HTMLElement): string | undefined {
     }
 
     const date = dateElement.innerText || dateElement.textContent || "";
-    return date.trim() || undefined;
+    return cleanupText(date) || undefined;
   } catch (error) {
     console.error("[DOM] Error extracting post date:", error);
     return undefined;
@@ -121,6 +134,111 @@ export function extractPostData(element: HTMLElement): PostData {
     authorName: extractAuthorName(element),
     postDate: extractPostDate(element),
   };
+}
+
+/** Sections that never contain the post being replied to. */
+const NON_POST_SECTIONS = [
+  "[class*='comment']",
+  "[class*='reply']",
+  "[class*='nav']",
+  "nav",
+  "header",
+  "footer",
+  "aside",
+  "[role='navigation']",
+  "[role='banner']",
+  ".ai-reply-modal-container",
+  ".ai-reply-btn",
+].join(", ");
+
+/** Only these are examined when hunting for the post body text. */
+const TEXT_BLOCK_SELECTOR = [
+  "p",
+  "article",
+  "h1",
+  "h2",
+  "h3",
+  "li",
+  "[class*='commentary']",
+  "[class*='update-components-text']",
+  "[class*='attributed-text']",
+  "[class*='feed-shared-text']",
+  "[class*='description']",
+  "span",
+  "div",
+].join(", ");
+
+/**
+ * Finds the post text for a composer, without depending on LinkedIn's
+ * container class names being stable.
+ *
+ * 1. the recognised post containers
+ * 2. walking up from the composer looking for a prose block that is not part of
+ *    a comment thread, a navigation bar or our own UI
+ */
+export function findPostText(element: HTMLElement): {
+  text: string;
+  source: string;
+} {
+  // 1) Known container
+  const container = element.closest<HTMLElement>(SELECTORS.postContainer);
+  if (container) {
+    const block = container.querySelector<HTMLElement>(SELECTORS.postContent);
+    const text = cleanupText(
+      (block?.innerText || block?.textContent || "").trim()
+    );
+    if (looksLikeContent(text)) {
+      return { text, source: "post container" };
+    }
+  }
+
+  // 2) Walk up and look for prose near the composer
+  let node = element.parentElement;
+
+  for (let level = 0; level < 8 && node && node !== document.body; level++) {
+    let candidates: HTMLElement[];
+
+    try {
+      candidates = Array.from(
+        node.querySelectorAll<HTMLElement>(TEXT_BLOCK_SELECTOR)
+      ).slice(0, 400);
+    } catch {
+      candidates = [];
+    }
+
+    const qualifying = candidates.filter((candidate) => {
+      // Never the composer itself, its wrappers, or anything inside a
+      // comment/nav section.
+      if (candidate.contains(element)) return false;
+      if (candidate.closest(NON_POST_SECTIONS)) return false;
+
+      // Prefer the innermost block that already has enough text.
+      const hasQualifyingChild = Array.from(candidate.children).some(
+        (child) =>
+          !child.contains(element) &&
+          looksLikeContent(cleanupText(child.textContent || ""))
+      );
+      if (hasQualifyingChild) return false;
+
+      return looksLikeContent(cleanupText(candidate.textContent || ""));
+    });
+
+    if (qualifying.length > 0) {
+      // The longest block at the closest level is the best guess.
+      const best = qualifying.reduce((a, b) =>
+        (a.textContent || "").length >= (b.textContent || "").length ? a : b
+      );
+
+      return {
+        text: cleanupText((best.textContent || "").trim()),
+        source: `nearby block (level ${level + 1})`,
+      };
+    }
+
+    node = node.parentElement;
+  }
+
+  return { text: "", source: "not found" };
 }
 
 /**

@@ -1,0 +1,118 @@
+name: Build
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WHEN THIS RUNS
+#
+#   push to `main`      -> runs
+#   tag created from a commit on `main` -> runs
+#   any other branch    -> workflow never starts (branches filter below)
+#   tag from another branch -> workflow starts, the `guard` job rejects it and
+#                              the build job is skipped (GitHub has no native
+#                              "tag came from branch X" filter - see
+#                              GITHUB_ACTIONS.md)
+#
+# To change the branch, tag pattern or add PR/manual runs, edit the `on:` block
+# below AND keep BASE_BRANCH in sync. Every change is documented in
+# GITHUB_ACTIONS.md at the project root.
+#
+# STORAGE: this workflow intentionally stores NOTHING. It never calls
+# actions/upload-artifact and never uses actions/cache, so no artifacts or
+# caches are kept after a run. Do not add those steps unless you want storage.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches:
+      - main # only this branch can trigger a run
+    tags:
+      - "*" # every tag; the guard job checks it points at a commit on main
+
+env:
+  # The only branch allowed to build. Keep in sync with `on.push.branches`.
+  BASE_BRANCH: main
+  NODE_VERSION: "20"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Guard ──────────────────────────────────────────────────────────────────
+  # Branch pushes cannot reach here unless they are `main`, because of the
+  # `branches:` filter. Tags can be created from any branch, so we verify the
+  # tagged commit is actually contained in BASE_BRANCH.
+  guard:
+    name: Verify the ref belongs to main
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Allow only refs that belong to the base branch
+        id: check
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$REF_TYPE" = "branch" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "Branch push to '$REF_NAME' - allowed (only $BASE_BRANCH can reach this job)."
+            exit 0
+          fi
+
+          # Make sure we have the base branch even if checkout was shallow-ish.
+          git fetch --no-tags --prune origin "$BASE_BRANCH"
+
+          # `github.sha` is the commit for lightweight tags and the tag object for
+          # annotated tags, so peel it down to a commit first (tags are fetched
+          # by checkout, so the tag object is available locally).
+          commit="$(git rev-parse "${SHA}^{commit}" 2>/dev/null || git rev-parse "$SHA")"
+
+          if git merge-base --is-ancestor "$commit" "origin/$BASE_BRANCH"; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "Tag '$REF_NAME' -> $commit is on $BASE_BRANCH - allowed."
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag '$REF_NAME' points at $commit, which is not on $BASE_BRANCH. Build skipped; nothing was stored."
+          fi
+
+  # ── Build ──────────────────────────────────────────────────────────────────
+  build:
+    name: Build, verify and test
+    needs: guard
+    if: needs.guard.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # No `cache:` on purpose - caches are stored too.
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build, verify and run all checks
+        # type-check -> both bundle passes -> verify-build -> UI smoke tests
+        # -> prompt/provider tests. Any failure fails the workflow.
+        run: npm run build
+
+      - name: Summarise what was produced (not uploaded)
+        run: |
+          echo "Build output below lives on the runner and is discarded when this job ends."
+          du -sh dist
+          find dist -maxdepth 1 -type f | sort

@@ -1,10 +1,38 @@
 import { UserSettings } from "../types/index.js";
+import { isKnownProvider } from "./providers.js";
 
 /**
  * Validates user settings object
  * Throws error if validation fails
  */
 export function validateSettings(settings: Partial<UserSettings>): void {
+  // Validate the selected provider
+  if (settings.provider !== undefined && !isKnownProvider(settings.provider)) {
+    throw new Error(`Unknown AI provider: ${settings.provider}`);
+  }
+
+  // Validate per-provider credentials
+  if (settings.providers !== undefined) {
+    if (typeof settings.providers !== "object" || settings.providers === null) {
+      throw new Error("Provider settings must be an object");
+    }
+
+    for (const [id, config] of Object.entries(settings.providers)) {
+      if (!config || typeof config !== "object") {
+        throw new Error(`Provider settings for ${id} are invalid`);
+      }
+      if (config.apiKey !== undefined && typeof config.apiKey !== "string") {
+        throw new Error(`API key for ${id} must be a string`);
+      }
+      if (config.model !== undefined && typeof config.model !== "string") {
+        throw new Error(`Model for ${id} must be a string`);
+      }
+      if (config.baseUrl !== undefined && typeof config.baseUrl !== "string") {
+        throw new Error(`Base URL for ${id} must be a string`);
+      }
+    }
+  }
+
   // Validate API key
   if (settings.apiKey !== undefined) {
     if (typeof settings.apiKey !== "string") {
@@ -54,6 +82,14 @@ export function validateSettings(settings: Partial<UserSettings>): void {
     if (settings.rateLimit < 1 || settings.rateLimit > 10000) {
       throw new Error("Rate limit must be between 1 and 10000");
     }
+  }
+
+  // Validate floating button preference
+  if (
+    settings.floatingButton !== undefined &&
+    typeof settings.floatingButton !== "boolean"
+  ) {
+    throw new Error("Floating button preference must be true or false");
   }
 }
 

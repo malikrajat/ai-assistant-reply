@@ -1,7 +1,13 @@
 import { getSettings, saveSettings, getUsage } from "../utils/storage.js";
 import { resetUsage } from "../utils/rateLimit.js";
-import { UserSettings } from "../types/index.js";
-import { callGeminiAPI } from "../utils/api.js";
+import {
+  UserSettings,
+  ProviderSettings,
+  LLMProvider,
+  DEFAULT_SETTINGS,
+} from "../types/index.js";
+import { callLLM } from "../utils/api.js";
+import { LLM_PROVIDERS, getProvider } from "../utils/providers.js";
 
 console.log("[Options] Options page loaded");
 
@@ -10,6 +16,14 @@ let apiKeyInput: HTMLInputElement;
 let toggleApiKeyBtn: HTMLButtonElement;
 let testConnectionBtn: HTMLButtonElement;
 let connectionStatus: HTMLElement;
+let providerSelect: HTMLSelectElement;
+let providerHelp: HTMLElement;
+let apiKeyLabel: HTMLElement;
+let apiKeyHelp: HTMLElement;
+let modelInput: HTMLInputElement;
+let modelSuggestions: HTMLDataListElement;
+let baseUrlGroup: HTMLElement;
+let baseUrlInput: HTMLInputElement;
 let toneRadios: NodeListOf<HTMLInputElement>;
 let maxLengthSlider: HTMLInputElement;
 let maxLengthValue: HTMLElement;
@@ -17,6 +31,7 @@ let defaultActionRadios: NodeListOf<HTMLInputElement>;
 let rateLimitInput: HTMLInputElement;
 let rateLimitValue: HTMLElement;
 let stealthModeCheckbox: HTMLInputElement;
+let floatingButtonCheckbox: HTMLInputElement;
 let currentUsageEl: HTMLElement;
 let usageLimitEl: HTMLElement;
 let usageProgressBar: HTMLElement;
@@ -24,6 +39,10 @@ let resetTimeEl: HTMLElement;
 let resetUsageBtn: HTMLButtonElement;
 let saveSettingsBtn: HTMLButtonElement;
 let saveStatus: HTMLElement;
+
+// Per-provider credentials the user has entered (kept in memory while editing)
+let providersState: Record<string, ProviderSettings> = {};
+let activeProviderId: LLMProvider = DEFAULT_SETTINGS.provider;
 
 /**
  * Initialize the options page
@@ -57,6 +76,14 @@ function getDOMElements(): void {
   toggleApiKeyBtn = document.getElementById("toggleApiKey") as HTMLButtonElement;
   testConnectionBtn = document.getElementById("testConnection") as HTMLButtonElement;
   connectionStatus = document.getElementById("connectionStatus") as HTMLElement;
+  providerSelect = document.getElementById("providerSelect") as HTMLSelectElement;
+  providerHelp = document.getElementById("providerHelp") as HTMLElement;
+  apiKeyLabel = document.getElementById("apiKeyLabel") as HTMLElement;
+  apiKeyHelp = document.getElementById("apiKeyHelp") as HTMLElement;
+  modelInput = document.getElementById("modelInput") as HTMLInputElement;
+  modelSuggestions = document.getElementById("modelSuggestions") as HTMLDataListElement;
+  baseUrlGroup = document.getElementById("baseUrlGroup") as HTMLElement;
+  baseUrlInput = document.getElementById("baseUrlInput") as HTMLInputElement;
   toneRadios = document.querySelectorAll('input[name="tone"]');
   maxLengthSlider = document.getElementById("maxLength") as HTMLInputElement;
   maxLengthValue = document.getElementById("maxLengthValue") as HTMLElement;
@@ -64,6 +91,7 @@ function getDOMElements(): void {
   rateLimitInput = document.getElementById("rateLimit") as HTMLInputElement;
   rateLimitValue = document.getElementById("rateLimitValue") as HTMLElement;
   stealthModeCheckbox = document.getElementById("stealthMode") as HTMLInputElement;
+  floatingButtonCheckbox = document.getElementById("floatingButton") as HTMLInputElement;
   currentUsageEl = document.getElementById("currentUsage") as HTMLElement;
   usageLimitEl = document.getElementById("usageLimit") as HTMLElement;
   usageProgressBar = document.getElementById("usageProgressBar") as HTMLElement;
@@ -79,6 +107,9 @@ function getDOMElements(): void {
 function setupEventListeners(): void {
   // API key toggle
   toggleApiKeyBtn.addEventListener("click", toggleApiKeyVisibility);
+
+  // Provider switching
+  providerSelect.addEventListener("change", handleProviderChange);
 
   // Test connection
   testConnectionBtn.addEventListener("click", testAPIConnection);
@@ -98,11 +129,15 @@ function setupEventListeners(): void {
   // Enable save button when any input changes
   const inputs = [
     apiKeyInput,
+    providerSelect,
+    modelInput,
+    baseUrlInput,
     ...Array.from(toneRadios),
     maxLengthSlider,
     ...Array.from(defaultActionRadios),
     rateLimitInput,
     stealthModeCheckbox,
+    floatingButtonCheckbox,
   ];
 
   inputs.forEach((input) => {
@@ -121,8 +156,10 @@ async function loadSettingsToUI(): Promise<void> {
     const settings = await getSettings();
     console.log("[Options] Loaded settings:", settings);
 
-    // API key
-    apiKeyInput.value = settings.apiKey || "";
+    // Providers
+    populateProviders();
+    providersState = JSON.parse(JSON.stringify(settings.providers || {}));
+    applyProviderToForm(settings.provider || DEFAULT_SETTINGS.provider);
 
     // Tone
     toneRadios.forEach((radio) => {
@@ -148,6 +185,9 @@ async function loadSettingsToUI(): Promise<void> {
 
     // Stealth mode
     stealthModeCheckbox.checked = settings.stealthMode ?? true;
+
+    // Floating quick button
+    floatingButtonCheckbox.checked = settings.floatingButton ?? true;
 
     // Disable save button initially
     saveSettingsBtn.disabled = true;
@@ -192,13 +232,31 @@ async function saveSettingsFromUI(): Promise<void> {
     }
 
     // Build settings object
+    captureProviderInputs();
+
+    if (activeProviderId === "custom") {
+      const allowed = await ensureHostPermission(
+        providersState.custom?.baseUrl || ""
+      );
+      if (!allowed) {
+        showNotification(
+          "Chrome permission for that API host was declined - requests may fail.",
+          "error"
+        );
+      }
+    }
+
     const settings: UserSettings = {
-      apiKey: apiKeyInput.value.trim(),
+      provider: activeProviderId,
+      providers: providersState as UserSettings["providers"],
+      // Legacy field kept in sync so older builds keep working.
+      apiKey: providersState.gemini?.apiKey || "",
       tone: selectedTone,
       maxLength,
       defaultAction: selectedAction,
       rateLimit,
       stealthMode: stealthModeCheckbox.checked,
+      floatingButton: floatingButtonCheckbox.checked,
     };
 
     // Save to storage
@@ -234,37 +292,140 @@ function toggleApiKeyVisibility(): void {
 }
 
 /**
+ * Fills the provider dropdown from the provider registry.
+ */
+function populateProviders(): void {
+  providerSelect.innerHTML = LLM_PROVIDERS.map(
+    (provider) => `<option value="${provider.id}">${provider.label}</option>`
+  ).join("");
+}
+
+/**
+ * Points the credential/model inputs at a provider.
+ */
+function applyProviderToForm(providerId: string): void {
+  const provider = getProvider(providerId);
+  activeProviderId = provider.id as LLMProvider;
+
+  providerSelect.value = provider.id;
+  apiKeyLabel.innerHTML = `${provider.label} API Key${
+    provider.allowEmptyKey ? "" : ' <span class="required">*</span>'
+  }`;
+  apiKeyInput.placeholder = provider.keyHint;
+  apiKeyInput.value = providersState[provider.id]?.apiKey || "";
+
+  modelInput.value =
+    providersState[provider.id]?.model || provider.defaultModel;
+  modelSuggestions.innerHTML = provider.suggestedModels
+    .map((model) => `<option value="${model}"></option>`)
+    .join("");
+
+  const isCustom = provider.id === "custom";
+  baseUrlGroup.style.display = isCustom ? "" : "none";
+  baseUrlInput.value =
+    providersState[provider.id]?.baseUrl || provider.baseUrl;
+
+  providerHelp.textContent = isCustom
+    ? "Point the extension at any OpenAI-compatible API (including a local server)."
+    : `Replies are generated by ${provider.label} using your own key.`;
+
+  apiKeyHelp.innerHTML = provider.keyUrl
+    ? `Get a key from <a href="${provider.keyUrl}" target="_blank" rel="noopener noreferrer" class="link">${provider.label}</a>. Keys are stored in Chrome sync storage on your machine.`
+    : "Leave the key empty if your endpoint does not require one.";
+}
+
+/**
+ * Copies the current inputs back into the in-memory provider state.
+ */
+function captureProviderInputs(): void {
+  const provider = getProvider(activeProviderId);
+
+  providersState[activeProviderId] = {
+    apiKey: apiKeyInput.value.trim(),
+    model: modelInput.value.trim() || provider.defaultModel,
+    baseUrl: baseUrlInput.value.trim() || provider.baseUrl,
+  };
+}
+
+/**
+ * Switching provider swaps in that provider's saved key and model.
+ */
+function handleProviderChange(): void {
+  captureProviderInputs();
+  applyProviderToForm(providerSelect.value);
+  saveSettingsBtn.disabled = false;
+  saveStatus.textContent = "";
+}
+
+/**
+ * Custom endpoints need an extra host permission before fetch() can reach them.
+ */
+async function ensureHostPermission(baseUrl: string): Promise<boolean> {
+  try {
+    if (!baseUrl) return true;
+
+    const url = new URL(baseUrl);
+    if (url.protocol !== "https:") return true;
+
+    const origin = `${url.origin}/*`;
+    const hasPermission = await chrome.permissions.contains({
+      origins: [origin],
+    });
+    if (hasPermission) return true;
+
+    return await chrome.permissions.request({ origins: [origin] });
+  } catch (error) {
+    console.warn("[Options] Could not check host permission:", error);
+    return true;
+  }
+}
+
+/**
  * Tests the API connection with the provided API key
  */
 async function testAPIConnection(): Promise<void> {
   try {
-    const apiKey = apiKeyInput.value.trim();
+    captureProviderInputs();
+    const provider = getProvider(activeProviderId);
+    const config = providersState[activeProviderId];
 
-    if (!apiKey) {
-      showConnectionStatus("Please enter an API key", "error");
+    if (!config?.apiKey && !provider.allowEmptyKey) {
+      showConnectionStatus(`Please enter your ${provider.label} API key`, "error");
       return;
     }
 
     // Disable button and show loading
     testConnectionBtn.disabled = true;
     testConnectionBtn.textContent = "Testing...";
-    showConnectionStatus("Testing connection...", "loading");
+    showConnectionStatus(`Testing ${provider.label}...`, "loading");
 
-    // Create a test settings object
     const testSettings: UserSettings = {
-      apiKey,
+      ...DEFAULT_SETTINGS,
+      provider: activeProviderId,
+      providers: providersState as UserSettings["providers"],
+      apiKey: providersState.gemini?.apiKey || "",
       tone: "professional",
-      maxLength: 100,
+      maxLength: 200,
       defaultAction: "insert",
       rateLimit: 50,
       stealthMode: true,
+      floatingButton: true,
     };
 
     // Make a test API call
-    await callGeminiAPI("Hello, this is a test.", testSettings);
+    const reply = await callLLM(
+      "I am happy to share that I am starting a new position as a Senior Software Engineer at Apple!",
+      testSettings,
+      { surface: "comment", mode: "reply", charLimit: 200 }
+    );
 
     // Success
-    showConnectionStatus("Connection successful! ✓", "success");
+    showConnectionStatus(
+      `Connection successful! ✓ Sample: "${reply.slice(0, 80)}${
+        reply.length > 80 ? "..." : ""
+      }"`,
+      "success"
+    );
   } catch (error) {
     console.error("[Options] Connection test failed:", error);
     const message =

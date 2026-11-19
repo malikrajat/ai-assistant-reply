@@ -1,0 +1,118 @@
+{
+  "settings": {
+    "captureLevel": "error",
+    "errorOnly": true,
+    "capturePageErrors": true,
+    "captureConsoleErrors": false,
+    "captureNetworkFailures": true,
+    "autoOpen": "on-error",
+    "autoSendEnabled": true,
+    "autoSendConsent": true,
+    "autoSendEndpoint": "https://logs.example.com/ingest",
+    "autoSendMethod": "POST",
+    "autoSendHeaders": "{\n  \"Authorization\": \"Bearer [REDACTED]\"\n}",
+    "autoSendIntervalMinutes": 5,
+    "autoSendLevel": "error",
+    "autoSendRetries": 3,
+    "autoSendTimeoutMs": 10000,
+    "supportEmail": "support@example.com",
+    "maxEntries": 200,
+    "retentionDays": 7,
+    "redactSecrets": true,
+    "statusBadge": true,
+    "notificationsEnabled": true,
+    "screenshotFormat": "png",
+    "includeEnvironment": true,
+    "includeFullUrls": false,
+    "allowedExternalIds": [
+      "abcdefghijklmnopabcdefghijklmnop"
+    ],
+    "allowedOrigins": [
+      "https://app.example.com"
+    ]
+  },
+  "entries": [
+    {
+      "id": "doc-1",
+      "timestamp": "2026-11-07T05:12:39.543Z",
+      "level": "error",
+      "source": "page",
+      "message": "TypeError: Cannot read properties of undefined (reading \"profile\")",
+      "details": "at renderProfile (https://app.example.com/assets/app.js:412:19)",
+      "stack": "TypeError: Cannot read properties of undefined (reading \"profile\")\n    at renderProfile (app.js:412:19)\n    at mountDashboard (app.js:288:7)",
+      "url": "https://app.example.com/dashboard",
+      "tabId": 1,
+      "tabTitle": "Acme Dashboard",
+      "metadata": {
+        "kind": "error",
+        "line": 412,
+        "column": 19
+      }
+    },
+    {
+      "id": "doc-2",
+      "timestamp": "2026-11-07T05:05:39.543Z",
+      "level": "failure",
+      "source": "network",
+      "message": "HTTP 503 Service Unavailable",
+      "details": "method=GET type=xmlhttprequest status=503",
+      "url": "https://api.example.com/v1/projects",
+      "tabId": 1,
+      "tabTitle": "Acme Dashboard",
+      "metadata": {
+        "method": "GET",
+        "type": "xmlhttprequest",
+        "statusCode": 503
+      }
+    },
+    {
+      "id": "doc-3",
+      "timestamp": "2026-11-07T04:58:39.543Z",
+      "level": "failure",
+      "source": "network",
+      "message": "Network request failed: net::ERR_CONNECTION_RESET",
+      "details": "method=POST type=fetch error=net::ERR_CONNECTION_RESET",
+      "url": "https://api.example.com/v1/telemetry",
+      "tabId": 2,
+      "tabTitle": "Settings",
+      "metadata": {
+        "method": "POST",
+        "type": "fetch"
+      }
+    },
+    {
+      "id": "doc-4",
+      "timestamp": "2026-11-07T04:50:39.543Z",
+      "level": "error",
+      "source": "extension",
+      "message": "Unhandled promise rejection: Could not refresh workspace token",
+      "stack": "Error: Could not refresh workspace token\n    at refreshToken (background.js:91:11)\n    at async onAlarm (background.js:140:3)",
+      "metadata": {
+        "kind": "unhandledrejection"
+      }
+    },
+    {
+      "id": "doc-5",
+      "timestamp": "2026-11-07T04:36:39.543Z",
+      "level": "warn",
+      "source": "console.error",
+      "message": "Deprecated analytics.identify() signature",
+      "details": "The second argument will be required in v3.",
+      "url": "https://app.example.com/settings",
+      "tabId": 2,
+      "tabTitle": "Settings"
+    },
+    {
+      "id": "doc-6",
+      "timestamp": "2026-11-07T04:00:39.543Z",
+      "level": "error",
+      "source": "external",
+      "message": "Coverage failed for src/utils/report.ts",
+      "details": "The external API added this entry. Authorization: Bearer [REDACTED]",
+      "metadata": {
+        "extension": "coverage-pilot",
+        "report": "coverage-final.json"
+      }
+    }
+  ]
+}
