@@ -1,0 +1,68 @@
+{
+  "name": "log-lens-chrome",
+  "version": "1.1.0",
+  "description": "Log Lens for Chrome - capture, review, send, screenshot, and export browser error logs. Local-first, private by default, no analytics.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "build": "npm run typecheck && npm run build:pages && npm run build:content && npm run build:bridge && npm run verify",
+    "build:pages": "vite build",
+    "build:content": "vite build --config vite.content.config.ts",
+    "build:bridge": "vite build --config vite.bridge.config.ts && vite build --config vite.console.config.ts",
+    "verify": "node scripts/verify-build.mjs",
+    "zip": "npm run build && node scripts/pack.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "docs:images": "node scripts/docs-images.mjs",
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "error-logging",
+    "error-tracking",
+    "log-viewer",
+    "diagnostics",
+    "screenshot",
+    "privacy",
+    "local-first"
+  ],
+  "author": "Rajat Malik",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/malikrajat/log-lens.git"
+  },
+  "homepage": "https://github.com/malikrajat/log-lens",
+  "dependencies": {
+    "dom-to-image-more": "^3.11.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.65.0",
+    "@types/archiver": "^6.0.3",
+    "@types/chrome": "^0.1.29",
+    "@types/node": "^24.10.1",
+    "@types/pngjs": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.12",
+    "archiver": "^7.0.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "jsdom": "^27.0.0",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.0"
+  }
+}

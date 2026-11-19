@@ -25,8 +25,14 @@
           <h2 class="section-title">API Configuration</h2>
           <div class="section-content">
             <div class="form-group">
-              <label for="apiKey" class="label">
-                Gemini API Key
+              <label for="providerSelect" class="label">AI Provider</label>
+              <select id="providerSelect" class="input select-input"></select>
+              <p class="help-text" id="providerHelp"></p>
+            </div>
+
+            <div class="form-group">
+              <label for="apiKey" class="label" id="apiKeyLabel">
+                API Key
                 <span class="required">*</span>
               </label>
               <div class="input-with-button">
@@ -34,7 +40,7 @@
                   type="password"
                   id="apiKey"
                   class="input"
-                  placeholder="Enter your Gemini API key"
+                  placeholder="Enter your API key"
                   autocomplete="off"
                 />
                 <button type="button" id="toggleApiKey" class="btn-icon" aria-label="Toggle API key visibility">
@@ -43,11 +49,36 @@
                   </svg>
                 </button>
               </div>
+              <p class="help-text" id="apiKeyHelp"></p>
+            </div>
+
+            <div class="form-group">
+              <label for="modelInput" class="label">Model</label>
+              <input
+                type="text"
+                id="modelInput"
+                class="input"
+                list="modelSuggestions"
+                autocomplete="off"
+              />
+              <datalist id="modelSuggestions"></datalist>
               <p class="help-text">
-                Get your API key from 
-                <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="link">
-                  Google AI Studio
-                </a>
+                Defaults to the recommended model for the selected provider.
+              </p>
+            </div>
+
+            <div class="form-group" id="baseUrlGroup" style="display: none">
+              <label for="baseUrlInput" class="label">Base URL</label>
+              <input
+                type="url"
+                id="baseUrlInput"
+                class="input"
+                placeholder="https://your-endpoint/v1"
+                autocomplete="off"
+              />
+              <p class="help-text">
+                OpenAI-compatible endpoint ending in /v1. Chrome will ask for
+                permission to reach this host when you save.
               </p>
             </div>
 
@@ -170,6 +201,23 @@
                   <span class="checkbox-description">Simulate human typing to make text insertion appear more natural</span>
                 </span>
               </label>
+            </div>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="floatingButton" class="checkbox-input" />
+                <span class="checkbox-text">
+                  <strong>Floating Quick Button</strong>
+                  <span class="checkbox-description">
+                    Show a small "✨" button on the text box you're typing in - comments, messages,
+                    connection notes and post drafts. Works alongside the keyboard shortcut.
+                  </span>
+                </span>
+              </label>
+              <p class="help-text">
+                Keyboard shortcut: press <strong>Alt+Shift+G</strong> in any LinkedIn text box to
+                generate instantly. Remap it at chrome://extensions/shortcuts
+              </p>
             </div>
           </div>
         </section>

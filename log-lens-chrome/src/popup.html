@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Log Lens</title>
+  </head>
+  <body class="popup-page">
+    <header class="popup-header">
+      <div class="brand compact">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div class="brand-copy">
+          <h1>Log Lens</h1>
+          <p>Error logs, in focus</p>
+        </div>
+      </div>
+      <button class="btn ghost icon" type="button" data-action="settings" title="Settings" aria-label="Settings">⚙</button>
+    </header>
+
+    <section class="popup-status" aria-label="Capture status">
+      <span id="popup-status-text" class="status-pill"><i></i> Loading…</span>
+      <span id="popup-autosend" class="badge info">Auto-send off</span>
+    </section>
+
+    <section class="popup-stats" aria-label="Log statistics">
+      <div class="stat">
+        <strong id="popup-count">0</strong>
+        <span>Entries</span>
+      </div>
+      <div class="stat">
+        <strong id="popup-errors">0</strong>
+        <span>Errors</span>
+      </div>
+      <div class="stat">
+        <strong id="popup-last">—</strong>
+        <span>Last error</span>
+      </div>
+    </section>
+
+    <section class="popup-actions" aria-label="Log actions">
+      <button class="btn primary" type="button" data-action="open">◉ Open Logs</button>
+      <button class="btn" type="button" data-action="email">✉ Email Logs</button>
+      <button class="btn" type="button" data-action="export">⇩ Export Logs</button>
+      <button class="btn" type="button" data-action="screenshot">▣ Screenshot</button>
+      <button class="btn" type="button" data-action="copy">⧉ Copy All</button>
+      <button class="btn danger" type="button" data-action="clear">⌫ Clear Logs</button>
+    </section>
+
+    <section class="popup-recent" aria-label="Latest log entries">
+      <div class="section-heading">
+        <h2>Latest</h2>
+        <button class="btn ghost small" type="button" data-action="open">View all</button>
+      </div>
+      <div id="popup-list" class="popup-list"></div>
+    </section>
+
+    <footer class="popup-footer">
+      <button class="btn ghost small" type="button" data-action="settings">Settings</button>
+      <span class="muted"><span id="popup-version"></span> · Ctrl+Shift+L</span>
+    </footer>
+
+    <script type="module" src="./popup/popup.ts"></script>
+  </body>
+</html>

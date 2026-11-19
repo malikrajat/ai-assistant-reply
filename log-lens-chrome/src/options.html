@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Log Lens Settings</title>
+  </head>
+  <body class="options-page">
+    <div class="options-shell">
+      <header class="options-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span></div>
+          <div class="brand-copy">
+            <h1>Log Lens Settings</h1>
+            <p>Local-first error capture for Chrome. No analytics, no default uploads.</p>
+          </div>
+        </div>
+        <div class="header-meta">
+          <span id="options-version" class="badge info">v1.1.0</span>
+          <button id="reset-defaults" class="btn ghost small" type="button">Reset defaults</button>
+        </div>
+      </header>
+
+      <div class="notice privacy-notice">
+        <strong>Privacy first.</strong>
+        Log Lens never captures cookies, form values, auth headers, request bodies, response bodies, or page text.
+        Secrets are redacted before storage, sending, email, export, and screenshots. Auto-send is off until you
+        explicitly opt in below.
+      </div>
+
+      <div id="settings-status" class="status-message" role="status" aria-live="polite"></div>
+
+      <main class="settings-grid">
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Automatic capture</h2>
+            <p>Only errors and failures are stored unless you lower the minimum level.</p>
+          </div>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Minimum capture level</span>
+              <select id="capture-level" class="select">
+                <option value="error">Error</option>
+                <option value="failure">Failure</option>
+                <option value="warn">Warning</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+              </select>
+              <small>Lower levels increase noise and storage use.</small>
+            </label>
+            <label class="field">
+              <span>Capture mode</span>
+              <span class="switch-row">
+                <input id="error-only" type="checkbox" />
+                <span>Errors and failures only</span>
+              </span>
+              <small>Recommended. Ignore the level above for warn/info/debug.</small>
+            </label>
+          </div>
+
+          <div class="toggle-list">
+            <label class="toggle-field">
+              <input id="capture-page-errors" type="checkbox" />
+              <span>
+                <strong>Capture page errors</strong>
+                <small>Window errors and unhandled rejections from websites. Requires optional host permission.</small>
+              </span>
+            </label>
+            <label class="toggle-field">
+              <input id="capture-console-errors" type="checkbox" />
+              <span>
+                <strong>Capture console.error</strong>
+                <small>Optional MAIN-world bridge. It only forwards arguments passed to console.error.</small>
+              </span>
+            </label>
+            <label class="toggle-field">
+              <input id="capture-network-failures" type="checkbox" />
+              <span>
+                <strong>Capture network failures</strong>
+                <small>Failed requests and HTTP 4xx/5xx status codes. Metadata only; no headers or bodies.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label class="toggle-field compact">
+              <input id="redact-secrets" type="checkbox" />
+              <span>
+                <strong>Redact secrets</strong>
+                <small>Tokens, API keys, passwords, bearer headers, and credential-like strings.</small>
+              </span>
+            </label>
+            <label class="toggle-field compact">
+              <input id="include-full-urls" type="checkbox" />
+              <span>
+                <strong>Store full URLs</strong>
+                <small>Off by default. Query strings are stripped; credentials are always removed.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="permission-line">
+            <span>Page-capture permission:</span>
+            <strong id="permission-page-status">Not granted</strong>
+          </div>
+        </section>
+
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Storage and retention</h2>
+            <p>A persistent ring buffer in <code>chrome.storage.local</code>.</p>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Maximum entries</span>
+              <input id="max-entries" class="input" type="number" min="10" max="2000" step="10" />
+              <small>Default 200. Oldest entries are trimmed first.</small>
+            </label>
+            <label class="field">
+              <span>Retention (days)</span>
+              <input id="retention-days" class="input" type="number" min="1" max="365" />
+              <small>Default 7 days.</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Auto-open and alerts</h2>
+            <p>Choose how Log Lens responds when something breaks.</p>
+          </div>
+          <label class="field">
+            <span>Open the log UI</span>
+            <select id="auto-open" class="select">
+              <option value="never">Never</option>
+              <option value="on-error">On error or failure</option>
+              <option value="always">On every captured entry</option>
+            </select>
+            <small>Prefers the side panel and falls back to a logs tab when Chrome requires a user gesture.</small>
+          </label>
+          <div class="toggle-list">
+            <label class="toggle-field compact">
+              <input id="notifications-enabled" type="checkbox" />
+              <span>
+                <strong>Desktop notification on error</strong>
+                <small>Click the notification to open Log Lens. Rate-limited to avoid notification storms.</small>
+              </span>
+            </label>
+            <label class="toggle-field compact">
+              <input id="status-badge" type="checkbox" />
+              <span>
+                <strong>Toolbar error badge</strong>
+                <small>Shows the current error count and hides at zero.</small>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Reports and screenshots</h2>
+            <p>Used by Email Logs, Export Logs, and Capture Screenshot.</p>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Support email</span>
+              <input id="support-email" class="input" type="email" placeholder="support@example.com" />
+              <small>Recipient for the pre-filled mailto report.</small>
+            </label>
+            <label class="field">
+              <span>Screenshot format</span>
+              <select id="screenshot-format" class="select">
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+              </select>
+              <small>Screenshots are saved locally with a save dialog.</small>
+            </label>
+          </div>
+          <label class="toggle-field compact">
+            <input id="include-environment" type="checkbox" />
+            <span>
+              <strong>Include environment header</strong>
+              <small>Version, Chrome version, platform, and user agent in reports.</small>
+            </span>
+          </label>
+        </section>
+
+        <section class="card settings-section auto-send-section">
+          <div class="section-title">
+            <h2>Automatic sending</h2>
+            <p>Off by default. Nothing is sent until you consent and enable it.</p>
+          </div>
+
+          <label class="consent-box">
+            <input id="auto-send-consent" type="checkbox" />
+            <span>
+              <strong>I understand that enabling auto-send uploads log entries to my endpoint.</strong>
+              <small>Log Lens never sends cookies, page content, form values, request bodies, or response bodies.</small>
+            </span>
+          </label>
+
+          <label class="toggle-field compact">
+            <input id="auto-send-enabled" type="checkbox" />
+            <span>
+              <strong>Enable automatic sending</strong>
+              <small>Requires the consent checkbox above and a valid HTTPS endpoint (localhost HTTP is allowed for development).</small>
+            </span>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Endpoint URL</span>
+              <input id="auto-send-endpoint" class="input" type="url" placeholder="https://logs.example.com/ingest" />
+              <small>Chrome asks for permission to reach this origin when you save.</small>
+            </label>
+            <label class="field">
+              <span>HTTP method</span>
+              <select id="auto-send-method" class="select">
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+              </select>
+              <small>JSON body with <code>extension</code>, <code>version</code>, <code>sentAt</code>, and <code>entries</code>.</small>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Custom headers (JSON)</span>
+            <textarea id="auto-send-headers" class="textarea" spellcheck="false" placeholder='{"Authorization":"Bearer …"}'></textarea>
+            <small>Headers are sent only to your endpoint. They are not written to logs.</small>
+          </label>
+
+          <div class="field-row three">
+            <label class="field">
+              <span>Interval (minutes)</span>
+              <input id="auto-send-interval" class="input" type="number" min="0" max="1440" />
+              <small>0 = send immediately after a matching entry. Minimum scheduled interval is 1 minute.</small>
+            </label>
+            <label class="field">
+              <span>Minimum level to send</span>
+              <select id="auto-send-level" class="select">
+                <option value="error">Error</option>
+                <option value="failure">Failure</option>
+                <option value="warn">Warning</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Retries</span>
+              <input id="auto-send-retries" class="input" type="number" min="0" max="10" />
+              <small>Exponential backoff, capped at 60 seconds.</small>
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Timeout (ms)</span>
+              <input id="auto-send-timeout" class="input" type="number" min="1000" max="60000" step="1000" />
+            </label>
+            <div class="field">
+              <span>Outbox</span>
+              <div class="inline-actions">
+                <span id="outbox-count" class="count-pill">0 pending batches</span>
+                <button id="retry-outbox" class="btn small" type="button">Retry queued sends</button>
+              </div>
+              <small>Failed sends stay queued until they succeed or you clear logs.</small>
+            </div>
+          </div>
+
+          <div class="inline-actions wrap">
+            <button id="preview-payload" class="btn" type="button">Preview test payload</button>
+            <button id="send-test" class="btn" type="button">Send test payload</button>
+          </div>
+          <div class="permission-line">
+            <span>Endpoint permission:</span>
+            <strong id="permission-endpoint-status">Not configured</strong>
+          </div>
+        </section>
+
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Public API</h2>
+            <p>Let other extensions and approved web origins add entries to Log Lens.</p>
+          </div>
+
+          <div class="field">
+            <span>Log Lens extension ID</span>
+            <div class="inline-actions">
+              <code id="extension-id" class="code-pill">loading…</code>
+              <button id="copy-extension-id" class="btn small" type="button">Copy</button>
+            </div>
+            <small>Other extensions call <code>chrome.runtime.sendMessage(extensionId, …)</code>.</small>
+          </div>
+
+          <label class="field">
+            <span>Approved extension IDs</span>
+            <textarea id="allowed-external-ids" class="textarea" spellcheck="false" placeholder="abcdefghijklmnopabcdefghijklmnop"></textarea>
+            <small>One 32-character extension ID per line. Empty means no other extension can add entries.</small>
+          </label>
+
+          <label class="field">
+            <span>Approved web origins</span>
+            <textarea id="allowed-origins" class="textarea" spellcheck="false" placeholder="https://app.example.com"></textarea>
+            <small>Exact origins only, one per line. Wildcards are rejected.</small>
+          </label>
+
+          <div class="permission-line">
+            <span>Network-capture permission:</span>
+            <strong id="permission-network-status">Not granted</strong>
+          </div>
+        </section>
+
+        <section class="card settings-section">
+          <div class="section-title">
+            <h2>Permissions explained</h2>
+            <p>Log Lens asks for the smallest set Chrome allows.</p>
+          </div>
+          <ul class="permission-list">
+            <li><strong>storage</strong> — persist settings, logs, and the auto-send outbox locally.</li>
+            <li><strong>alarms</strong> — scheduled auto-send and retention sweeps.</li>
+            <li><strong>notifications</strong> — desktop alert when a new error is captured.</li>
+            <li><strong>downloads</strong> — save exported logs and screenshots.</li>
+            <li><strong>clipboardWrite</strong> — copy logs and reports after a user action.</li>
+            <li><strong>activeTab</strong> — capture the visible page only after you act.</li>
+            <li><strong>scripting / sidePanel / contextMenus</strong> — page bridges, the log panel, and shortcuts.</li>
+            <li><strong>Optional tabs / webRequest / host permissions</strong> — requested only when you enable network or page capture, or configure an auto-send endpoint.</li>
+          </ul>
+          <p class="muted small">
+            No analytics, no remote code, no account, and no default network destination. See the README for the full privacy model.
+          </p>
+        </section>
+      </main>
+
+      <footer class="sticky-actions">
+        <span id="save-hint" class="muted small">Changes are saved to chrome.storage.local.</span>
+        <div class="inline-actions">
+          <button id="open-logs" class="btn" type="button">Open Log Lens</button>
+          <button id="save-settings" class="btn primary" type="button">Save Settings</button>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="./options/options.ts"></script>
+  </body>
+</html>

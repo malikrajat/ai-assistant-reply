@@ -4,7 +4,8 @@ import {
   MessageToBackground,
 } from "./types/index.js";
 import { getSettings } from "./utils/storage.js";
-import { callGeminiAPI, sanitizePostText } from "./utils/api.js";
+import { callLLM, resolveProviderConfig, sanitizePostText } from "./utils/api.js";
+import { getSurfaceLimit } from "./utils/composers.js";
 import { trackUsage } from "./utils/rateLimit.js";
 import { validatePostText } from "./utils/validation.js";
 
@@ -90,7 +91,14 @@ async function handleGenerateReply(
     console.log("[Service Worker] Starting reply generation...");
 
     // Extract payload
-    const { postText, authorName, postDate } = request.payload;
+    const {
+      postText,
+      authorName,
+      surface = "comment",
+      mode = "reply",
+      recipientName,
+      draft,
+    } = request.payload;
 
     // Validate post text
     validatePostText(postText);
@@ -101,15 +109,22 @@ async function handleGenerateReply(
       `[Service Worker] Post text sanitized (${sanitizedText.length} chars)`
     );
 
+    // The user's own draft (or LinkedIn placeholder text) is context too, so it
+    // goes through the same clean-up instead of being forwarded verbatim.
+    const sanitizedDraft = draft ? sanitizePostText(draft, 800) : undefined;
+
     // Get user settings
     const settings = await getSettings();
     console.log(
       `[Service Worker] Settings loaded: tone=${settings.tone}, maxLength=${settings.maxLength}`
     );
 
-    // Check if API key is configured
-    if (!settings.apiKey || settings.apiKey.trim().length === 0) {
-      throw new Error("API key not configured");
+    // Check that the selected provider is ready to use
+    const { provider, config } = resolveProviderConfig(settings);
+    if (!config.apiKey && !provider.allowEmptyKey) {
+      throw new Error(
+        `${provider.label} API key is not configured. Open the extension settings and add it.`
+      );
     }
 
     // Track usage and check rate limit
@@ -126,8 +141,18 @@ async function handleGenerateReply(
     }
 
     // Call Gemini API
-    console.log("[Service Worker] Calling Gemini API...");
-    const reply = await callGeminiAPI(sanitizedText, settings);
+    const charLimit = getSurfaceLimit(surface, settings.maxLength);
+    console.log(
+      `[Service Worker] Calling Gemini API... (surface=${surface}, mode=${mode}, limit=${charLimit})`
+    );
+    const reply = await callLLM(sanitizedText, settings, {
+      surface,
+      mode,
+      authorName,
+      recipientName: recipientName?.slice(0, 120),
+      draft: sanitizedDraft,
+      charLimit,
+    });
 
     const duration = Date.now() - startTime;
     console.log(
@@ -188,6 +213,23 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Service Worker] Browser started, service worker active");
   startKeepAlive();
+});
+
+/**
+ * Keyboard shortcut (remappable at chrome://extensions/shortcuts).
+ * Asks the tab that has focus to generate for whatever text box is focused.
+ */
+chrome.commands?.onCommand.addListener((command, tab) => {
+  if (command !== "generate-ai-reply") return;
+
+  const tabId = tab?.id;
+  if (typeof tabId !== "number") return;
+
+  chrome.tabs.sendMessage(tabId, { type: "TRIGGER_REPLY" }, () => {
+    // Reading lastError avoids an "Unchecked runtime.lastError" console warning
+    // when the shortcut is pressed on a page without our content script.
+    void chrome.runtime.lastError;
+  });
 });
 
 /**

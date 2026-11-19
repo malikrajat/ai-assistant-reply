@@ -1,5 +1,45 @@
-import { UserSettings, DEFAULT_SETTINGS, UsageData } from '../types/index.js';
+import {
+  UserSettings,
+  DEFAULT_SETTINGS,
+  UsageData,
+  ProviderSettings,
+} from '../types/index.js';
 import { validateSettings } from './validation.js';
+
+/**
+ * Fills in every provider entry and migrates the old single Gemini key into the
+ * new per-provider structure.
+ */
+export function normalizeSettings(
+  stored: Partial<UserSettings> | undefined
+): UserSettings {
+  const storedProviders =
+    (stored?.providers as Record<string, ProviderSettings> | undefined) || {};
+  const defaults =
+    DEFAULT_SETTINGS.providers as Record<string, ProviderSettings>;
+
+  const providers: Record<string, ProviderSettings> = {};
+  for (const [id, fallback] of Object.entries(defaults)) {
+    providers[id] = { ...fallback, ...(storedProviders[id] || {}) };
+  }
+
+  // Legacy installs only had a single Gemini key.
+  if (stored?.apiKey && !providers.gemini.apiKey) {
+    providers.gemini.apiKey = stored.apiKey;
+  }
+
+  const merged: UserSettings = {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    providers: providers as UserSettings['providers'],
+  };
+
+  if (!providers[merged.provider]) {
+    merged.provider = DEFAULT_SETTINGS.provider;
+  }
+
+  return merged;
+}
 
 /**
  * Retrieves user settings from chrome.storage.sync
@@ -8,7 +48,7 @@ import { validateSettings } from './validation.js';
 export async function getSettings(): Promise<UserSettings> {
   try {
     const data = await chrome.storage.sync.get('settings');
-    return { ...DEFAULT_SETTINGS, ...data.settings };
+    return normalizeSettings(data.settings);
   } catch (error) {
     console.error('[Storage] Error getting settings:', error);
     return DEFAULT_SETTINGS;
