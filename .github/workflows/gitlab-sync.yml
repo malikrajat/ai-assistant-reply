@@ -1,15 +1,28 @@
 name: Mirror to GitLab
 
-# Every push (all branches and tags) mirrors this repository to GitLab. The
-# destination is derived at runtime, so renaming the GitHub repository or the
-# owner carries over without editing this file.
+# Generic GitLab mirror. Copy this file unchanged to
+# .github/workflows/gitlab-sync.yml in any repository.
 #
-# Required repository secret:
+# Nothing about a repository is hardcoded here. At runtime it derives:
+#   owner and project name  from GITHUB_REPOSITORY
+#   GitHub fetch URL        from GITHUB_SERVER_URL
+#   GitLab host             from GITLAB_HOST, default gitlab.com
+#   GitLab namespace        from GITLAB_NAMESPACE, default GitHub owner
+#   GitLab project path     from GITLAB_PROJECT_PATH, default repository name
+#
+# The only required per-repository setup is a GITLAB_TOKEN secret, provided the
+# default GitLab namespace (the GitHub owner) already exists. If it does not,
+# set GITLAB_NAMESPACE once as an organization variable. All other values are
+# optional and can also be organization secrets/variables because GitHub
+# exposes organization values through the same secrets and vars contexts.
+# A GitHub rename or transfer is followed automatically.
+#
+# Required secret:
 #   GITLAB_TOKEN   personal, group, or project access token with the
 #                  write_repository scope. Add api to allow automatic project
 #                  creation and richer diagnostics.
 #
-# Optional repository variables:
+# Optional repository or organization variables:
 #   GITLAB_HOST             default: gitlab.com
 #   GITLAB_NAMESPACE        default: github.repository_owner (nested groups
 #                           such as group/subgroup are supported)
