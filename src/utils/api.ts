@@ -323,6 +323,81 @@ export function resolveProviderConfig(settings: UserSettings): {
 }
 
 /**
+ * Models that cannot be used to write LinkedIn text, even though a provider's
+ * model list includes them. Keeps the "Fetch models" picker useful instead of
+ * dumping every embedding/image/audio model into the dropdown.
+ */
+const NON_CHAT_MODEL =
+  /(?:^|[-/:_])(embed(?:ding)?s?|image|imagen|tts|speech|audio|whisper|transcri\w*|realtime|moderation|ocr)(?:[-/:_]|$)/i;
+
+/**
+ * Fetches the models a provider actually serves and returns them as IDs that
+ * can be pasted into the Model field.
+ *
+ * Works for OpenAI-compatible `/models`, Anthropic `/models`, Gemini `/models`
+ * and Ollama's OpenAI-compatible `/v1/models`. A provider can override the
+ * discovery URL with `modelListUrl` (OpenCode's gateway lists models at a
+ * different path than its chat endpoint).
+ */
+export async function fetchProviderModels(
+  providerId: string,
+  config: ResolvedProviderConfig
+): Promise<string[]> {
+  const provider = getProvider(providerId);
+  const listKind = provider.modelListKind ?? provider.kind;
+  const baseEndpoint = provider.modelListUrl || joinUrl(config.baseUrl, "models");
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+
+  let endpoint = baseEndpoint;
+
+  try {
+    if (listKind === "gemini") {
+      endpoint = `${baseEndpoint}${
+        baseEndpoint.includes("?") ? "&" : "?"
+      }key=${encodeURIComponent(config.apiKey)}`;
+    } else if (listKind === "anthropic") {
+      headers["x-api-key"] = config.apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerous-direct-browser-access"] = "true";
+    } else if (config.apiKey) {
+      headers.Authorization = `Bearer ${config.apiKey}`;
+    }
+
+    const response = await fetchWithRetry(
+      endpoint,
+      { method: "GET", headers },
+      3
+    );
+
+    const data = (await response.json()) as {
+      data?: Array<{ id?: string; name?: string }>;
+      models?: Array<{ id?: string; name?: string }>;
+      error?: { message?: string };
+    };
+
+    if (data.error?.message) {
+      throw new Error(data.error.message);
+    }
+
+    const rawModels = listKind === "gemini" ? data.models || [] : data.data || [];
+
+    const ids = rawModels
+      .map((model) => (model.id || model.name || "").trim())
+      // Gemini prefixes names with "models/"; the chat caller needs the bare ID.
+      .map((id) => id.replace(/^models\//, ""))
+      .filter((id) => id.length > 0 && !NON_CHAT_MODEL.test(id));
+
+    return [...new Set(ids)].sort((a, b) => a.localeCompare(b)).slice(0, 500);
+  } catch (error) {
+    console.error(`[API] Could not list ${provider.label} models:`, error);
+    throw toFriendlyError(error, provider.label, provider.id);
+  }
+}
+
+/**
  * Calls whichever provider the user configured.
  */
 export async function callLLM(
@@ -376,7 +451,7 @@ export async function callLLM(
     return reply;
   } catch (error) {
     console.error(`[API] Error calling ${provider.label}:`, error);
-    throw toFriendlyError(error, provider.label, provider.allowEmptyKey);
+    throw toFriendlyError(error, provider.label, provider.id);
   }
 }
 
@@ -532,9 +607,11 @@ async function callAnthropic(
 function toFriendlyError(
   error: unknown,
   providerLabel: string,
-  allowEmptyKey?: boolean
+  providerId?: string
 ): Error {
   const message = error instanceof Error ? error.message : String(error);
+  const provider = providerId ? getProvider(providerId) : undefined;
+  const allowEmptyKey = provider?.allowEmptyKey === true;
 
   if (/401|unauthoriz|invalid.*api.?key|authentication/i.test(message)) {
     return new Error(
@@ -543,6 +620,15 @@ function toFriendlyError(
   }
   if (/402|insufficient|credit|balance/i.test(message)) {
     return new Error(`${providerLabel} account has no credits left.`);
+  }
+  // Ollama rejects browser-extension origins until OLLAMA_ORIGINS allows them.
+  // Say so explicitly instead of blaming Chrome permissions alone.
+  if (/origin.*not allowed|not allowed.*origin|OLLAMA_ORIGINS|cors/i.test(message)) {
+    return new Error(
+      providerId === "ollama"
+        ? "Ollama blocked the extension's origin. Set OLLAMA_ORIGINS=chrome-extension://* and restart Ollama. See the README's Ollama setup notes."
+        : `${providerLabel} blocked the extension's origin. Allow chrome-extension:// origins in the server's CORS settings.`
+    );
   }
   if (/403|permission|not allowed/i.test(message)) {
     return new Error(
@@ -564,7 +650,11 @@ function toFriendlyError(
   if (/network|failed to fetch|load failed|fetch/i.test(message)) {
     return new Error(
       `Could not reach ${providerLabel}. Check your connection${
-        allowEmptyKey ? " and that the host is allowed for this extension" : ""
+        providerId === "ollama"
+          ? ", that Ollama is running, and that OLLAMA_ORIGINS includes chrome-extension://* (then restart Ollama)"
+          : allowEmptyKey
+            ? " and that the host is allowed for this extension"
+            : ""
       }.`
     );
   }

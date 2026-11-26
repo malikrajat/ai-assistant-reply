@@ -1,16 +1,8 @@
-import { LLM_PROVIDERS } from "../utils/providers.js";
+import { LLM_PROVIDERS, ProviderId } from "../utils/providers.js";
 
-// AI Provider Selection
-export type LLMProvider =
-  | "gemini"
-  | "openai"
-  | "anthropic"
-  | "deepseek"
-  | "groq"
-  | "mistral"
-  | "openrouter"
-  | "xai"
-  | "custom";
+// AI Provider Selection - derived from the registry, so adding a provider to
+// LLM_PROVIDERS is enough to extend storage, validation and the settings UI.
+export type LLMProvider = ProviderId;
 
 // Per-provider credentials and model
 export interface ProviderSettings {

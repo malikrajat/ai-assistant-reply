@@ -6,14 +6,14 @@
   "packageManager": "pnpm@7.1.2",
   "scripts": {
     "dev": "node scripts/dev.js",
-    "build": "npm run type-check && vite build && vite build --mode content && npm run verify && npm run smoke && npm run test:prompt",
-    "build:prod": "npm run clean && npm run type-check && vite build --mode production && vite build --mode content && npm run verify && npm run smoke && npm run test:prompt",
+    "build": "tsc --noEmit && vite build && vite build --mode content && node scripts/verify-build.js && node scripts/smoke-test.js && node scripts/prompt-test.js",
+    "build:prod": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\" && tsc --noEmit && vite build --mode production && vite build --mode content && node scripts/verify-build.js && node scripts/smoke-test.js && node scripts/prompt-test.js",
     "build:content": "vite build --mode content",
     "smoke": "node scripts/smoke-test.js",
     "test:prompt": "node scripts/prompt-test.js",
     "type-check": "tsc --noEmit",
     "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\"",
-    "watch": "npm run dev",
+    "watch": "node scripts/dev.js",
     "verify": "node scripts/verify-build.js"
   },
   "keywords": [
