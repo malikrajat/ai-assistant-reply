@@ -201,7 +201,12 @@ const requests = [];
 
 function stubFetch(reply, options = {}) {
   globalThis.fetch = async (url, init) => {
-    requests.push({ url: String(url), init, body: JSON.parse(init.body) });
+    // GET requests (model discovery) have no body to parse.
+    requests.push({
+      url: String(url),
+      init,
+      body: init.body ? JSON.parse(init.body) : null,
+    });
 
     if (options.status && options.status >= 400) {
       return {
@@ -232,6 +237,32 @@ function settingsFor(providerId, apiKey, model) {
       [providerId]: { apiKey, model, baseUrl: undefined },
     },
   };
+}
+
+/**
+ * Expected provider failures are real test cases, but their console output
+ * looks like a broken build. Keep the assertion and hide only the logs emitted
+ * by callLLM during that one call.
+ */
+async function captureExpectedError(providerId, apiKey, model) {
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = () => {};
+  console.error = () => {};
+
+  try {
+    await api.callLLM("post", settingsFor(providerId, apiKey, model), {
+      surface: "comment",
+      mode: "reply",
+      charLimit: 300,
+    });
+    return "";
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
 }
 
 // DeepSeek is the provider the user asked for: OpenAI-compatible shape.
@@ -301,18 +332,137 @@ check(
   geminiRequest.body.contents[0].parts[0].text.includes("Some post text about a promotion")
 );
 
+// ---------------------------------------------- new provider presets + local --
+
+const registry = providersModule.LLM_PROVIDERS;
+const registeredIds = registry.map((provider) => provider.id);
+
+check(
+  "provider ids are unique",
+  new Set(registeredIds).size === registry.length
+);
+check(
+  "OpenCode and Ollama are first-class providers",
+  registeredIds.includes("opencode") &&
+    registeredIds.includes("ollama") &&
+    registeredIds.includes("lmstudio") &&
+    registeredIds.includes("vllm")
+);
+check(
+  "local servers can run without a key",
+  providersModule
+    .getProvider("ollama")
+    .allowEmptyKey === true &&
+    providersModule.getProvider("ollama").baseUrl ===
+      "http://localhost:11434/v1"
+);
+check(
+  "OpenCode uses the Console chat endpoint and model list",
+  providersModule.getProvider("opencode").baseUrl ===
+    "https://opencode.ai/inference/openai/v1" &&
+    providersModule.getProvider("opencode").modelListUrl ===
+      "https://opencode.ai/inference/v1/models"
+);
+
+stubFetch({ choices: [{ message: { content: "Congrats on the Apple role!" } }] });
+await api.callLLM(
+  "Some post text about a promotion",
+  settingsFor("opencode", "oc_sk_test", "gpt-5.4-mini"),
+  { surface: "comment", mode: "reply", charLimit: 300 }
+);
+const opencodeRequest = requests.at(-1);
+
+check(
+  "OpenCode request reaches the gateway's chat completions endpoint",
+  opencodeRequest.url ===
+    "https://opencode.ai/inference/openai/v1/chat/completions",
+  `(${opencodeRequest.url})`
+);
+check(
+  "OpenCode request carries the bearer token",
+  opencodeRequest.init.headers.Authorization === "Bearer oc_sk_test"
+);
+
+stubFetch({ choices: [{ message: { content: "Congrats on the Apple role!" } }] });
+await api.callLLM(
+  "Some post text about a promotion",
+  settingsFor("ollama", "", "llama3.2"),
+  { surface: "comment", mode: "reply", charLimit: 300 }
+);
+const ollamaRequest = requests.at(-1);
+
+check(
+  "Ollama request reaches the local server",
+  ollamaRequest.url === "http://localhost:11434/v1/chat/completions",
+  `(${ollamaRequest.url})`
+);
+check(
+  "Ollama request omits Authorization when there is no key",
+  !("Authorization" in ollamaRequest.init.headers)
+);
+
+// Model discovery: OpenAI-compatible, Ollama and Gemini response shapes.
+stubFetch({
+  data: [
+    { id: "llama3.2" },
+    { id: "nomic-embed-text" },
+    { id: "qwen3:8b" },
+  ],
+});
+const ollamaModels = await api.fetchProviderModels("ollama", {
+  apiKey: "",
+  model: "",
+  baseUrl: "http://localhost:11434/v1",
+});
+check(
+  "Ollama model discovery lists chat models only",
+  ollamaModels.includes("llama3.2") &&
+    ollamaModels.includes("qwen3:8b") &&
+    !ollamaModels.includes("nomic-embed-text"),
+  `(${ollamaModels.join(", ")})`
+);
+check(
+  "Ollama model discovery calls /v1/models",
+  requests.at(-1).url === "http://localhost:11434/v1/models"
+);
+
+stubFetch({
+  models: [
+    { name: "models/gemini-2.5-flash" },
+    { name: "models/gemini-2.5-flash-image" },
+  ],
+});
+const geminiModels = await api.fetchProviderModels("gemini", {
+  apiKey: "AIza-test",
+  model: "",
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+});
+check(
+  "Gemini model discovery strips the models/ prefix and image models",
+  geminiModels.includes("gemini-2.5-flash") &&
+    !geminiModels.some((model) => model.includes("models/") || /image/i.test(model)),
+  `(${geminiModels.join(", ")})`
+);
+check(
+  "Gemini model discovery sends the key",
+  requests.at(-1).url.includes("key=AIza-test")
+);
+
+stubFetch({ data: [{ id: "gpt-5.4-mini" }, { id: "claude-haiku-4.5" }] });
+await api.fetchProviderModels("opencode", {
+  apiKey: "oc_sk_test",
+  model: "",
+  baseUrl: "https://opencode.ai/inference/openai/v1",
+});
+check(
+  "OpenCode model discovery uses the override URL",
+  requests.at(-1).url === "https://opencode.ai/inference/v1/models",
+  `(${requests.at(-1).url})`
+);
+
 // Errors should be actionable, not raw provider noise.
 stubFetch(null, { status: 401, errorBody: "invalid api key provided" });
-let errorMessage = "";
-try {
-  await api.callLLM("post", settingsFor("deepseek", "bad", "deepseek-chat"), {
-    surface: "comment",
-    mode: "reply",
-    charLimit: 300,
-  });
-} catch (error) {
-  errorMessage = error.message;
-}
+const errorMessage = await captureExpectedError("deepseek", "bad", "deepseek-chat");
 
 check(
   "bad key produces an actionable message",
@@ -321,21 +471,30 @@ check(
 );
 
 // A missing key is called out with the provider name.
-let missingKeyMessage = "";
-try {
-  await api.callLLM("post", settingsFor("groq", "", "llama-3.3-70b-versatile"), {
-    surface: "comment",
-    mode: "reply",
-    charLimit: 300,
-  });
-} catch (error) {
-  missingKeyMessage = error.message;
-}
+const missingKeyMessage = await captureExpectedError(
+  "groq",
+  "",
+  "llama-3.3-70b-versatile"
+);
 
 check(
   "missing key names the provider",
   /Groq .*API key not configured/i.test(missingKeyMessage),
   `(${missingKeyMessage})`
+);
+
+// Ollama returns a 403 when a browser extension origin is not allowlisted.
+stubFetch(null, {
+  status: 403,
+  statusText: "Forbidden",
+  errorBody: "Forbidden: origin not allowed",
+});
+const originMessage = await captureExpectedError("ollama", "", "llama3.2");
+
+check(
+  "Ollama origin error explains OLLAMA_ORIGINS",
+  /OLLAMA_ORIGINS=chrome-extension:\/\/\*/.test(originMessage),
+  `(${originMessage})`
 );
 
 if (failures.length) {

@@ -221,30 +221,56 @@ button at all.
 Pick the provider in **Full Settings → AI Configuration**. Keys are stored per provider, so you
 can switch back and forth without re-entering anything.
 
-| Provider | API shape | Default model | Where to get a key |
-| --- | --- | --- | --- |
-| Google Gemini | `generateContent` | `gemini-2.5-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| DeepSeek | OpenAI-compatible | `deepseek-chat` | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
-| OpenAI | OpenAI-compatible | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/api-keys) |
-| Anthropic Claude | Anthropic Messages | `claude-3-5-sonnet-latest` | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| Groq | OpenAI-compatible | `llama-3.3-70b-versatile` | [console.groq.com](https://console.groq.com/keys) |
-| Mistral AI | OpenAI-compatible | `mistral-small-latest` | [console.mistral.ai](https://console.mistral.ai/api-keys) |
-| OpenRouter | OpenAI-compatible | `openai/gpt-4o-mini` | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| xAI Grok | OpenAI-compatible | `grok-2-latest` | [console.x.ai](https://console.x.ai) |
-| Custom | OpenAI-compatible | your choice | any endpoint (`https://host/v1`, including a local server) |
+The provider dropdown is grouped so you can pick a direct API, a multi-model gateway, a local
+server, or a custom endpoint. Keys are stored per provider.
+
+| Group | Provider | API shape | Default model | Where to get a key |
+| --- | --- | --- | --- | --- |
+| Cloud | Google Gemini | `generateContent` | `gemini-2.5-flash` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| Cloud | DeepSeek | OpenAI-compatible | `deepseek-chat` | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| Cloud | OpenAI | OpenAI-compatible | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/api-keys) |
+| Cloud | Anthropic Claude | Anthropic Messages | `claude-3-5-sonnet-latest` | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| Cloud | Mistral AI | OpenAI-compatible | `mistral-small-latest` | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| Cloud | xAI Grok | OpenAI-compatible | `grok-2-latest` | [console.x.ai](https://console.x.ai) |
+| Cloud | Perplexity | OpenAI-compatible | `sonar` | [perplexity.ai/settings/api](https://www.perplexity.ai/settings/api) |
+| Cloud | Moonshot AI (Kimi) | OpenAI-compatible | `moonshot-v1-8k` | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) |
+| Gateway | Groq | OpenAI-compatible | `llama-3.3-70b-versatile` | [console.groq.com](https://console.groq.com/keys) |
+| Gateway | OpenRouter | OpenAI-compatible | `openai/gpt-4o-mini` | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| Gateway | OpenCode Console (formerly Zen) | OpenAI-compatible | `gpt-5.4-mini` | [opencode.ai/console](https://opencode.ai/console) |
+| Gateway | Together AI | OpenAI-compatible | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | [api.together.ai](https://api.together.ai/settings/api-keys) |
+| Gateway | Fireworks AI | OpenAI-compatible | `accounts/fireworks/models/llama-v3p3-70b-instruct` | [fireworks.ai](https://fireworks.ai/account/api-keys) |
+| Gateway | Hugging Face Inference | OpenAI-compatible | `meta-llama/Llama-3.3-70B-Instruct` | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| Gateway | GitHub Models | OpenAI-compatible | `openai/gpt-4.1-mini` | [github.com/settings/tokens](https://github.com/settings/tokens) |
+| Gateway | Cerebras | OpenAI-compatible | `llama-3.3-70b` | [cloud.cerebras.ai](https://cloud.cerebras.ai/platform/api-keys) |
+| Local | Ollama | OpenAI-compatible | `llama3.2` | no key needed |
+| Local | LM Studio | OpenAI-compatible | `local-model` | no key needed |
+| Local | vLLM / self-hosted | OpenAI-compatible | your choice | optional |
+| Custom | Custom (OpenAI-compatible) | OpenAI-compatible | your choice | any endpoint |
 
 Suggested models are offered as datalist suggestions, but the **Model** field is free text — any
-model that provider serves can be typed in.
+model that provider serves can be typed in. **Fetch models** asks the provider for its live model
+list and filters out embedding, image and audio models. For Ollama it lists the models you have
+pulled; for OpenCode it uses the Console model-list endpoint; for Gemini it strips the `models/`
+prefix automatically.
 
 Notes:
 
 - Every provider except Gemini and Claude uses the OpenAI-compatible `/chat/completions` shape.
   Custom endpoints use the same shape, which is what makes local models work.
+- **OpenCode Console** (previously Zen) serves all curated text models through one
+  OpenAI-compatible endpoint. Free chat models are only available inside OpenCode; use a paid
+  model from another client.
+- **Local Ollama**: run `ollama serve` and `ollama pull llama3.2`, select **Ollama (local)**, then
+  click **Fetch models**. `http://localhost/*` is already declared in the manifest, so Chrome does
+  not need to prompt for the default endpoint. Ollama *also* has to allow the extension's origin:
+  set `OLLAMA_ORIGINS=chrome-extension://*` and restart Ollama. Point the Base URL field at another
+  host/port if your Ollama server is not on the default one.
 - **Test Connection** sends a real sample post ("starting a new position as a Senior Software
   Engineer at Apple") and shows the beginning of the reply, so you can check both the key and
   the quality before using it on LinkedIn.
-- For a **Custom** endpoint, Chrome asks for permission to reach that host when you save. The
-  manifest's optional `https://*/*` permission is what backs that prompt.
+- For custom hosts, Chrome asks for permission to reach that origin when you save. The manifest's
+  optional `https://*/*` and `http://*/*` permissions back that prompt; loopback HTTP hosts are
+  declared up front.
 - The output budget scales with the character limit and keeps at least 1,024 tokens, leaving room
   for reasoning models such as Gemini 2.5 and `deepseek-reasoner` to think before writing.
 - Temperature follows the tone: Concise `0.3`, Professional `0.5`, Polite `0.7`, Friendly `0.8`.
@@ -294,17 +320,19 @@ it.
 ### 3. Connect a Provider
 
 1. Click the extension icon, then **Full Settings**
-2. Choose an **AI Provider**
-3. Paste that provider's API key — the key is saved per provider
-4. Leave the default model, or type another model name
+2. Choose an **AI Provider** from the grouped dropdown
+3. Paste that provider's API key — the key is saved per provider (local servers need none)
+4. Leave the default model, click **Fetch models**, or type another model name
 5. Click **Test Connection** and confirm you get real text back
 6. Choose tone, maximum length, default action, daily limit and button preferences
 7. Click **Save Settings**
 
-For a custom endpoint, set **Base URL** to an OpenAI-compatible root such as
-`https://your-host/v1` (or `http://localhost:11434/v1` for a local gateway that allows CORS), type
-the model name, and save. Chrome will request access to an HTTPS host. An API key may be left empty
-when the endpoint does not need one.
+For a local server, choose **Ollama (local)**, **LM Studio (local)** or **vLLM / self-hosted**.
+The Base URL field is shown for those and for **Custom**; set it to an OpenAI-compatible root such
+as `http://localhost:11434/v1`, then click **Fetch models**. Loopback HTTP hosts are already
+allowed in the manifest, so no Chrome prompt appears. For Ollama, set
+`OLLAMA_ORIGINS=chrome-extension://*` and restart Ollama first — otherwise it rejects the
+extension's origin. An API key may be left empty when the endpoint does not need one.
 
 ### 4. Generate Your First Reply
 
@@ -567,10 +595,10 @@ time, a manual counter reset and a **Test Connection** button.
 
 | Setting | Type | Default | Range / values | Description |
 | --- | --- | --- | --- | --- |
-| `provider` | string | `"gemini"` | one of the nine provider IDs | Which provider answers |
-| `providers[id].apiKey` | string | `""` | provider key | Stored per provider; may be empty for a keyless endpoint |
-| `providers[id].model` | string | provider default | free text | Any model that provider serves |
-| `providers[id].baseUrl` | string | provider base | URL | Only shown for **Custom**; OpenAI-compatible root |
+| `provider` | string | `"gemini"` | any ID in `LLM_PROVIDERS` (20 presets) | Which provider answers |
+| `providers[id].apiKey` | string | `""` | provider key | Stored per provider; may be empty for a local/keyless endpoint |
+| `providers[id].model` | string | provider default | free text | Any model that provider serves; **Fetch models** fills the suggestions |
+| `providers[id].baseUrl` | string | provider base | URL | Editable for local and **Custom** presets; OpenAI-compatible root |
 | `apiKey` | string | `""` | — | Legacy single Gemini key, kept so old installs keep working |
 | `tone` | string | `"professional"` | `professional` \| `polite` \| `friendly` \| `concise` | Controls prompt wording and temperature |
 | `maxLength` | number | `500` | 100–1000 | Character budget for the generated text |
@@ -629,8 +657,8 @@ Settings are validated before they are written. Invalid values throw instead of 
   message, connection request or post.
 - **No remote code**: the extension ships its own bundles. It does not load scripts, styles or
   modules from a remote origin.
-- **Narrow host access**: LinkedIn and the eight built-in provider hosts are declared up front.
-  A custom endpoint gets a runtime permission prompt for that origin only.
+- **Narrow host access**: LinkedIn, the built-in provider hosts and loopback HTTP hosts are
+  declared up front. Other custom endpoints get a runtime permission prompt for that origin only.
 
 ### What is logged
 
@@ -655,6 +683,7 @@ terms, your provider's terms and the accuracy of anything you publish.
 | `storage` | Persist settings and the daily usage counter |
 | `activeTab` | Grants temporary access to the active tab when the user invokes the extension; content-script access itself comes from the LinkedIn host permission |
 | `https://www.linkedin.com/*`, `https://linkedin.com/*`, `https://*.linkedin.com/*` (host) | Inject buttons, read the page's composers and insert text |
+| `http://localhost/*`, `http://127.0.0.1/*` (host) | Local Ollama, LM Studio, vLLM and other loopback OpenAI-compatible servers |
 | `https://generativelanguage.googleapis.com/*` (host) | Google Gemini requests |
 | `https://api.openai.com/*` (host) | OpenAI requests |
 | `https://api.anthropic.com/*` (host) | Anthropic Claude requests |
@@ -662,8 +691,10 @@ terms, your provider's terms and the accuracy of anything you publish.
 | `https://api.groq.com/*` (host) | Groq requests |
 | `https://api.mistral.ai/*` (host) | Mistral requests |
 | `https://openrouter.ai/*` (host) | OpenRouter requests |
+| `https://opencode.ai/*` (host) | OpenCode Console chat and model-list requests |
 | `https://api.x.ai/*` (host) | xAI Grok requests |
-| `https://*/*` (optional host) | Requested at runtime, for one origin, when you save a **Custom** endpoint |
+| `https://api.perplexity.ai/*`, `https://api.moonshot.ai/*`, `https://api.together.xyz/*`, `https://api.fireworks.ai/*`, `https://router.huggingface.co/*`, `https://models.github.ai/*`, `https://api.cerebras.ai/*` (host) | Other built-in OpenAI-compatible presets |
+| `https://*/*`, `http://*/*` (optional host) | Requested at runtime, for one origin, when you save/test/fetch models on a custom endpoint outside localhost |
 | `commands` (manifest) | Register `Alt+Shift+G`; remappable at `chrome://extensions/shortcuts` |
 | `web_accessible_resources` (manifest, not a permission) | Let the content script's stylesheet load on LinkedIn pages |
 
@@ -789,15 +820,18 @@ For rapid iteration, run `npm run dev` and reload the extension card after each 
 
 The provider registry is the single source of truth:
 
-1. Add an entry to `LLM_PROVIDERS` in `src/utils/providers.ts` — `id`, `label`, `kind`
-   (`gemini`, `anthropic` or `openai`), `baseUrl`, `defaultModel`, `suggestedModels`, `keyUrl`
-   and `keyHint`
-2. Add the ID to the `LLMProvider` union in `src/types/index.ts`
-3. Add a host permission for the provider's API origin in `public/manifest.json`
-4. Run `npm run build` — the prompt suite asserts the provider request shape and clean-up rules
+1. Add an entry to `LLM_PROVIDERS` in `src/utils/providers.ts`. Required: `id`, `label`, `group`
+   (`Cloud providers`, `Model gateways`, `Local & self-hosted`, `Custom`), `kind` (`gemini`,
+   `anthropic` or `openai`), `baseUrl`, `defaultModel`, `suggestedModels`, `keyUrl` and `keyHint`.
+   Optional: `allowEmptyKey`, `allowBaseUrlEdit`, `modelListUrl`, `modelListKind` and `help`.
+2. Add a host permission for the provider's API origin in `public/manifest.json` (or rely on the
+   optional `https://*/*` / `http://*/*` runtime prompt).
+3. Add a request-shape assertion to `scripts/prompt-test.js` if the provider needs one.
+4. Run `npm run build` — type-check, prompt tests and the smoke test all run.
 
-The options page, popup label and per-provider key storage pick the new entry up automatically.
-Nothing else needs to be wired by hand.
+The `LLMProvider` type, storage defaults, validation, grouped options dropdown, popup label and
+**Fetch models** button are derived from the registry. Nothing else needs to be wired by hand for
+a provider that speaks one of the three supported API shapes.
 
 ### Code Conventions
 
@@ -1033,12 +1067,22 @@ The **Model** field accepts free text, so a typo or a retired model name reaches
 verbatim. Pick one of the suggested models from the datalist, or copy the exact ID from the
 provider's model list.
 
-#### Issue: 403 on a custom endpoint
+#### Issue: "denied the request" / 403 on a local endpoint
 
-- Re-save the provider and accept the Chrome host-permission prompt
-- Confirm the **Base URL** ends at the API root (`https://host/v1`), not at a full endpoint path
-- The runtime permission prompt only covers `https://` origins. A plain `http://localhost`
-  endpoint therefore has to allow cross-origin requests (CORS) or be exposed over HTTPS
+- Chrome side: loopback hosts (`http://localhost/*`, `http://127.0.0.1/*`) are already granted in
+  the manifest. For a custom non-localhost endpoint, re-save the provider and accept the Chrome
+  host-permission prompt.
+- Ollama side: Ollama rejects browser-extension origins by default. Set
+  `OLLAMA_ORIGINS=chrome-extension://*`, quit Ollama from the system tray, then start it again.
+  In Windows PowerShell:
+
+  ```powershell
+  [Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', 'chrome-extension://*', 'User')
+  ```
+
+  Restart any terminal running `ollama serve` as well.
+- Confirm the **Base URL** ends at the API root (`http://localhost:11434/v1`), not at a full
+  endpoint path.
 
 #### Issue: "account has no credits left" / 402
 
@@ -1309,6 +1353,11 @@ grounded; return only the finished text.
 All three send a `temperature` and a computed output-token budget; the OpenAI-compatible caller
 also sets `stream: false`.
 
+Model discovery uses `GET {baseUrl}/models` for all three shapes (`/v1/models` on Ollama and other
+OpenAI-compatible servers), or a provider's `modelListUrl` when set. Gemini keys go in the query
+string, Anthropic keys in `x-api-key`, and OpenAI-compatible keys in the Bearer header. IDs are
+de-duplicated, sorted, stripped of Gemini's `models/` prefix and filtered for non-chat models.
+
 ### Methods
 
 | Function | Module | Returns | Description |
@@ -1321,6 +1370,7 @@ also sets `stream: false`.
 | `checkRateLimit()` | rateLimit | `Promise<LimitStatus>` | Status, count, limit and reset text |
 | `buildPrompt(text, settings, meta)` | api | `string` | Build the exact prompt |
 | `callLLM(text, settings, meta)` | api | `Promise<string>` | Call the configured provider |
+| `fetchProviderModels(providerId, config)` | api | `Promise<string[]>` | List the provider's chat models |
 | `fetchWithRetry(url, init, maxRetries?)` | api | `Promise<Response>` | Retry network/5xx, fail fast on 4xx |
 | `getComposerContext(composer)` | composers | `ComposerContext` | Draft, selection, nearby text and metadata |
 | `insertTextIntoComposer(...)` | composers | `Promise<boolean>` | Insert and verify into the live editor |
@@ -1534,10 +1584,13 @@ LinkedIn caps connection-request notes at 300 characters. The extension clamps t
 <details>
 <summary><strong>Can I use a local or self-hosted model?</strong></summary>
 
-Yes. Choose **Custom**, set the base URL to an OpenAI-compatible root such as
-`http://localhost:11434/v1`, set the model name, and leave the key empty if the server does not
-need one. For an HTTPS host, Chrome asks for permission; a plain `http://localhost` endpoint must
-allow CORS.
+Yes. Choose **Ollama (local)** (or **LM Studio**, **vLLM**, or **Custom**), leave the key empty, and
+click **Fetch models** to list what is installed. Ollama's default base URL is
+`http://localhost:11434/v1` — run `ollama serve` and `ollama pull llama3.2` first. Loopback HTTP
+hosts are declared in the manifest, so reload the unpacked extension in `chrome://extensions/`
+after rebuilding. Ollama itself must also allow the extension origin: set
+`OLLAMA_ORIGINS=chrome-extension://*` and restart Ollama, otherwise it rejects the request with
+403 "origin not allowed". Change the Base URL field if your server is on a different host or port.
 
 </details>
 

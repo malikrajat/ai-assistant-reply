@@ -54,17 +54,24 @@
 
             <div class="form-group">
               <label for="modelInput" class="label">Model</label>
-              <input
-                type="text"
-                id="modelInput"
-                class="input"
-                list="modelSuggestions"
-                autocomplete="off"
-              />
+              <div class="input-with-button">
+                <input
+                  type="text"
+                  id="modelInput"
+                  class="input"
+                  list="modelSuggestions"
+                  autocomplete="off"
+                />
+                <button type="button" id="fetchModels" class="btn btn-secondary btn-small">
+                  Fetch models
+                </button>
+              </div>
               <datalist id="modelSuggestions"></datalist>
               <p class="help-text">
-                Defaults to the recommended model for the selected provider.
+                Defaults to the recommended model. <strong>Fetch models</strong> lists the
+                models this provider actually serves (including local Ollama models).
               </p>
+              <span id="modelStatus" class="status-message"></span>
             </div>
 
             <div class="form-group" id="baseUrlGroup" style="display: none">
@@ -73,12 +80,12 @@
                 type="url"
                 id="baseUrlInput"
                 class="input"
-                placeholder="https://your-endpoint/v1"
+                placeholder="http://localhost:11434/v1"
                 autocomplete="off"
               />
               <p class="help-text">
-                OpenAI-compatible endpoint ending in /v1. Chrome will ask for
-                permission to reach this host when you save.
+                Editable for local and custom endpoints. Chrome will ask for permission to
+                reach this host when you save or fetch models.
               </p>
             </div>
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LinkedIn AI Reply Assistant",
   "version": "1.1.0",
-  "description": "AI-powered replies and drafts for LinkedIn posts, comments, messages and connection notes. Works with Gemini, OpenAI, Claude, DeepSeek, Groq, Mistral, OpenRouter and any OpenAI-compatible API",
+  "description": "AI-powered replies and drafts for LinkedIn. Works with Gemini, OpenAI, Claude, DeepSeek, OpenRouter, OpenCode, many OpenAI-compatible gateways and local Ollama models",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -16,6 +16,8 @@
     "https://www.linkedin.com/*",
     "https://linkedin.com/*",
     "https://*.linkedin.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
@@ -23,10 +25,19 @@
     "https://api.groq.com/*",
     "https://api.mistral.ai/*",
     "https://openrouter.ai/*",
-    "https://api.x.ai/*"
+    "https://opencode.ai/*",
+    "https://api.x.ai/*",
+    "https://api.perplexity.ai/*",
+    "https://api.moonshot.ai/*",
+    "https://api.together.xyz/*",
+    "https://api.fireworks.ai/*",
+    "https://router.huggingface.co/*",
+    "https://models.github.ai/*",
+    "https://api.cerebras.ai/*"
   ],
   "optional_host_permissions": [
-    "https://*/*"
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "serviceWorker.js",

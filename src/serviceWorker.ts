@@ -140,10 +140,10 @@ async function handleGenerateReply(
       throw error;
     }
 
-    // Call Gemini API
+    // Call the selected provider
     const charLimit = getSurfaceLimit(surface, settings.maxLength);
     console.log(
-      `[Service Worker] Calling Gemini API... (surface=${surface}, mode=${mode}, limit=${charLimit})`
+      `[Service Worker] Calling ${provider.label}... (model=${config.model}, surface=${surface}, mode=${mode}, limit=${charLimit})`
     );
     const reply = await callLLM(sanitizedText, settings, {
       surface,

@@ -1,5 +1,7 @@
 # LinkedIn AI Reply Assistant
 
+> **Note:** This is an older copy of the documentation. See [`README.md`](README.md) for the current provider list (including OpenCode Console/Zen, Ollama local models, model discovery and 20 presets).
+
 A Chrome extension that writes LinkedIn replies and drafts with the AI provider you choose - Gemini, OpenAI, Claude, DeepSeek, Groq, Mistral, OpenRouter, xAI or any OpenAI-compatible endpoint - in comments, messages, connection notes and post drafts.
 
 ## Features
